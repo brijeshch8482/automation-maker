@@ -1,0 +1,4 @@
+Sample notes for the word count test.
+This is the second line, with a few more words.
+
+The last line ends the sample.

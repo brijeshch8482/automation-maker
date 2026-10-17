@@ -7,6 +7,7 @@ from engine.blocks import calc, counter, custom, files, pdf, template
 from engine.context import RunContext
 from engine.errors import EngineError
 from engine.loader import LoadedSpec, load_spec
+from engine.sandbox import SandboxError
 from engine.values import Document, SavedFile
 from spec.catalog import (
     CounterNextArgs,
@@ -255,9 +256,28 @@ def test_custom_step_reads_selected_files_and_saves_new_ones(make_ctx, tmp_path)
         "    return ctx.save_bytes('copy.pdf', data)\n"
     )
     ctx = custom_ctx(make_ctx, tmp_path, code)
-    path = custom.run(ctx, CustomStepArgs(description="copy the first PDF"))
-    assert path == tmp_path / "out" / "copy.pdf"
-    assert path.read_bytes().startswith(b"%PDF")
+    saved = custom.run(ctx, CustomStepArgs(description="copy the first PDF"))
+    # Shown like file.save's result: "Open file" and the guide's sample output.
+    assert saved == SavedFile(tmp_path / "out" / "copy.pdf")
+    assert saved.path.read_bytes().startswith(b"%PDF")
+
+
+def test_custom_step_returns_a_document_for_file_save(make_ctx, tmp_path):
+    code = "def run(ctx):\n    return ctx.document(b'hello', 'TXT')\n"
+    document = custom.run(custom_ctx(make_ctx, tmp_path, code), CustomStepArgs(description="d"))
+    assert document == Document(b"hello", "txt")
+
+
+def test_custom_step_is_confined_from_its_first_line(make_ctx, tmp_path):
+    outside = tmp_path / "outside.txt"
+    code = (
+        "from pathlib import Path\n"
+        f"Path({str(outside)!r}).write_text('module level')\n"
+        "def run(ctx):\n    pass\n"
+    )
+    with pytest.raises(SandboxError):
+        custom.run(custom_ctx(make_ctx, tmp_path, code), CustomStepArgs(description="d"))
+    assert not outside.exists()
 
 
 def test_custom_step_cannot_read_other_files(make_ctx, tmp_path):

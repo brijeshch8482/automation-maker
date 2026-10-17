@@ -14,6 +14,7 @@ from tests.conftest import AUTOMATIONS_DIR, INVOICE_SPEC
 
 CALLBACK_SECRET = "test-callback-secret"
 BUILD_SECRET = "test-build-secret"
+COMMIT = "0123456789abcdef0123456789abcdef01234567"
 ALICE = {"Authorization": "Bearer dev:alice"}
 BOB = {"Authorization": "Bearer dev:bob"}
 
@@ -93,7 +94,7 @@ class Ctx:
             attempt=attempt,
             status="ok",
             branch=f"claude/job-{job_id}",
-            commit_sha="abc1234",
+            commit_sha=COMMIT,
             used_custom_step=False,
         )
         assert r.status_code == 204, r.text

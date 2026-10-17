@@ -19,6 +19,15 @@ on:
         description: Attempt number
         required: true
         default: "0"
+      # The API always sends both (docs/ROUTINES.md §5); leave them empty only for a test run.
+      commit:
+        description: Full SHA the job branch must point at (what the routine checked)
+        required: false
+        default: ""
+      spec_sha256:
+        description: Fingerprint of the confirmed spec (spec.fingerprint)
+        required: false
+        default: ""
 
 run-name: Build ${{ inputs.job_id }} (attempt ${{ inputs.attempt }})
 
@@ -38,6 +47,8 @@ jobs:
       JOB_ID: ${{ inputs.job_id }}
       JOB_BRANCH: ${{ inputs.branch }}
       ATTEMPT: ${{ inputs.attempt }}
+      COMMIT: ${{ inputs.commit }}
+      SPEC_SHA256: ${{ inputs.spec_sha256 }}
       PYTHONUTF8: "1"
     defaults:
       run:
@@ -48,6 +59,8 @@ jobs:
           [[ "$JOB_ID" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || { echo "::error::invalid job_id"; exit 1; }
           [[ "$JOB_BRANCH" == "claude/job-$JOB_ID" ]] || { echo "::error::branch must be claude/job-<job_id>"; exit 1; }
           [[ "$ATTEMPT" =~ ^[0-9]{1,2}$ ]] || { echo "::error::invalid attempt"; exit 1; }
+          [[ "$COMMIT" =~ ^([0-9a-f]{40})?$ ]] || { echo "::error::invalid commit"; exit 1; }
+          [[ "$SPEC_SHA256" =~ ^([0-9a-f]{64})?$ ]] || { echo "::error::invalid spec_sha256"; exit 1; }
 
       # main holds engine/, spec/, tools/, build/ and this workflow.
       - uses: actions/checkout@v4
@@ -57,6 +70,10 @@ jobs:
       - name: Take only jobs/<job_id>/ from the job branch
         run: |
           git fetch --depth 1 origin "refs/heads/$JOB_BRANCH"
+          # Pinned: build exactly the commit the routine checked, not a later push.
+          if [[ -n "$COMMIT" && "$(git rev-parse FETCH_HEAD)" != "$COMMIT" ]]; then
+            echo "::error::$JOB_BRANCH no longer points at $COMMIT"; exit 1
+          fi
           git checkout FETCH_HEAD -- "jobs/$JOB_ID"
           # The job's code runs from here on: remove the checkout token first.
           git config --local --unset-all http.https://github.com/.extraheader || true
@@ -75,7 +92,10 @@ jobs:
           uv sync --locked --no-dev --only-group build --inexact
 
       - name: Package, smoke test, launch check, guide
-        run: uv run --no-sync python -m build.package "jobs/$JOB_ID" --out dist --launch-check
+        # --expect-spec-sha256: refuse a spec.json that isn't the one the user confirmed.
+        run: >-
+          uv run --no-sync python -m build.package "jobs/$JOB_ID" --out dist --launch-check
+          ${SPEC_SHA256:+--expect-spec-sha256 "$SPEC_SHA256"}
 
       - name: Upload build
         if: always()

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from build import package
 from build.package import (
@@ -19,6 +20,7 @@ from build.package import (
     trim,
 )
 from engine.loader import load_spec
+from spec.fingerprint import spec_sha256
 from tests.conftest import AUTOMATIONS_DIR, REPO_ROOT
 
 
@@ -146,6 +148,30 @@ def test_a_failing_stage_stops_the_build_and_is_reported(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "out" / "report.json").read_text())["stage"] == "package"
 
 
+def test_spec_fingerprint_must_match_the_confirmed_spec(tmp_path, monkeypatch):
+    def fake_run(stage, cmd, log, env=None):
+        raise StageFailed(stage, "pyinstaller ...", "stop here")
+
+    monkeypatch.setattr(package, "run", fake_run)
+    app = AUTOMATIONS_DIR / "pdf-merge"
+    confirmed = json.loads((app / "spec.json").read_text(encoding="utf-8"))
+    # Same spec, other formatting: passes validate and goes on to package.
+    good = Packager(app, tmp_path / "a", False, expect_spec_sha256=spec_sha256(confirmed)).run()
+    assert good.stage == "package"
+
+    changed = {**confirmed, "network": {"required": True, "domains": ["example.com"]}}
+    bad = Packager(app, tmp_path / "b", False, expect_spec_sha256=spec_sha256(changed)).run()
+    assert (bad.status, bad.stage, bad.command) == ("failed", "validate", "spec fingerprint check")
+    assert "not the spec the user confirmed" in bad.log_tail
+
+
+def test_fingerprint_ignores_formatting_and_key_order():
+    a = {"id": "x", "steps": [{"block": "b", "args": {"k": 1, "j": "ü"}}]}
+    b = json.loads(json.dumps(a, indent=4, sort_keys=True, ensure_ascii=True))
+    assert spec_sha256(a) == spec_sha256(b)
+    assert spec_sha256(a) != spec_sha256({**a, "id": "y"})
+
+
 def test_a_bug_in_a_stage_is_still_reported(tmp_path, monkeypatch):
     def broken(self, spec):
         raise KeyError("oops")
@@ -175,6 +201,16 @@ def test_builds_repo_workflow_runs_the_same_command():
     build_job = build.split("\n  publish:")[0]
     assert "${{ secrets." not in build_job
     assert "extraheader" in build_job
+
+
+def test_builds_repo_workflow_pins_the_commit_and_the_spec():
+    build = (REPO_ROOT / "builds-repo" / ".github" / "workflows" / "build.yml").read_text()
+    inputs = yaml.safe_load(build)[True]["workflow_dispatch"]["inputs"]  # YAML reads `on` as True
+    assert {"job_id", "branch", "attempt", "commit", "spec_sha256"} <= set(inputs)
+    assert '"$(git rev-parse FETCH_HEAD)" != "$COMMIT"' in build
+    assert '--expect-spec-sha256 "$SPEC_SHA256"' in build
+    # The pin is checked before any of the job's files are taken from the branch.
+    assert build.index("rev-parse FETCH_HEAD") < build.index('git checkout FETCH_HEAD -- "jobs/')
 
 
 def test_entry_point_exists():

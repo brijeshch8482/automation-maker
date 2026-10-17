@@ -46,6 +46,14 @@ def check_production_settings(settings: Settings) -> None:
         for name in ("callback_token_secret", "build_callback_secret")
         if getattr(settings, name).get_secret_value() in ("", DEV_SECRET)
     ]
+    if settings.provider == "routine":
+        # Caught at start-up, not on the first job (which would fail with "not configured").
+        for name in ("routine_spec_url", "routine_build_url"):
+            if not getattr(settings, name):
+                problems.append(f"{name.upper()} is missing")
+        for name in ("routine_spec_token", "routine_build_token", "builds_github_token"):
+            if not getattr(settings, name).get_secret_value():
+                problems.append(f"{name.upper()} is missing")
     if settings.dev_auth:
         problems.append("DEV_AUTH must be false")
     if settings.on_render and settings.uses_sqlite:

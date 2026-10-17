@@ -157,14 +157,20 @@ async def test_github_dispatch():
         workflow="build.yml",
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
-    await d.dispatch("job_1", "claude/job-job_1", 1)
+    await d.dispatch("job_1", "claude/job-job_1", 1, commit="c" * 40, spec_sha256="f" * 64)
     (req,) = seen
     assert str(req.url) == (
         "https://api.github.com/repos/o/automation-builds/actions/workflows/build.yml/dispatches"
     )
     assert json.loads(req.content) == {
         "ref": "main",
-        "inputs": {"job_id": "job_1", "branch": "claude/job-job_1", "attempt": "1"},
+        "inputs": {
+            "job_id": "job_1",
+            "branch": "claude/job-job_1",
+            "attempt": "1",
+            "commit": "c" * 40,
+            "spec_sha256": "f" * 64,
+        },
     }
 
     failing = GitHubDispatcher(
@@ -174,9 +180,10 @@ async def test_github_dispatch():
         client=httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(404))),
     )
     with pytest.raises(DispatchError):
-        await failing.dispatch("job_1", "b", 0)
+        await failing.dispatch("job_1", "b", 0, commit="c", spec_sha256="f")
     with pytest.raises(DispatchError, match="not configured"):
-        await GitHubDispatcher(token="", repo="o/r", workflow="w.yml").dispatch("j", "b", 0)
+        unconfigured = GitHubDispatcher(token="", repo="o/r", workflow="w.yml")
+        await unconfigured.dispatch("j", "b", 0, commit="c", spec_sha256="f")
 
 
 def test_routine_mode_refuses_dev_secrets(tmp_path):
@@ -192,6 +199,17 @@ def test_routine_mode_refuses_dev_secrets(tmp_path):
         "callback_token_secret": SecretStr("a" * 40),
         "build_callback_secret": SecretStr("b" * 40),
     }
+    with pytest.raises(RuntimeError, match="ROUTINE_SPEC_URL is missing") as missing:
+        create_app(Settings(**base, provider="routine", **strong))
+    for name in ("ROUTINE_BUILD_URL", "ROUTINE_SPEC_TOKEN", "BUILDS_GITHUB_TOKEN"):
+        assert name in str(missing.value)
+    routines = {
+        "routine_spec_url": "https://api.anthropic.com/v1/claude_code/routines/trig_1/fire",
+        "routine_spec_token": SecretStr("t1"),
+        "routine_build_url": "https://api.anthropic.com/v1/claude_code/routines/trig_2/fire",
+        "routine_build_token": SecretStr("t2"),
+        "builds_github_token": SecretStr("gh"),
+    }
     with pytest.raises(RuntimeError, match="DEV_AUTH must be false"):
-        create_app(Settings(**base, provider="routine", dev_auth=True, **strong))
-    create_app(Settings(**base, provider="routine", **strong))
+        create_app(Settings(**base, provider="routine", dev_auth=True, **strong, **routines))
+    create_app(Settings(**base, provider="routine", **strong, **routines))

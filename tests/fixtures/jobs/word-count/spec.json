@@ -1,0 +1,25 @@
+{
+  "id": "word-count",
+  "version": "1.0.0",
+  "title": "Word Count",
+  "description": "Count the words, lines and characters in a text file and save a short report. Your text file stays as it is.",
+  "category": "documents",
+  "network": { "required": false, "domains": [] },
+  "settings": [
+    { "key": "output_folder", "type": "folder", "label": "Save reports to" }
+  ],
+  "inputs": [
+    { "key": "text_file", "type": "file", "label": "Text file", "required": true, "extensions": ["txt"] },
+    { "key": "report_name", "type": "text", "label": "Name of the report", "required": true, "default": "Word count" }
+  ],
+  "steps": [
+    {
+      "block": "custom.step",
+      "args": { "function": "run", "description": "Read the selected text file and return a .txt report with the number of words, lines and characters." },
+      "out": "report"
+    },
+    { "block": "file.save", "args": { "source": "report", "folder": "@settings.output_folder", "name": "{report_name}.txt" } }
+  ],
+  "output": { "type": "file", "open_after": true },
+  "sample_data": { "text_file": "samples/Notes.txt", "report_name": "Notes word count" }
+}

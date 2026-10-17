@@ -28,6 +28,7 @@ from api.providers import (
 )
 from api.security import callback_token
 from api.states import TERMINAL, JobState, check_transition
+from spec.fingerprint import spec_sha256
 from spec.validate import Issue, validate_spec
 
 
@@ -233,11 +234,20 @@ class JobService:
             return
 
         attempt.status = AttemptStatus.OK
-        job.branch = payload["branch"]
+        job.branch = payload.get("branch")
         job.commit_sha = payload.get("commit_sha")
         job.used_custom_step = payload.get("used_custom_step")
+        if not job.branch or not job.commit_sha:
+            self._fail(job, "the generation result named no branch or commit")
+            return
         try:
-            await self.dispatcher.dispatch(job.id, job.branch, job.attempt)
+            await self.dispatcher.dispatch(
+                job.id,
+                job.branch,
+                job.attempt,
+                commit=job.commit_sha,
+                spec_sha256=spec_sha256(job.spec or {}),
+            )
         except DispatchError as err:
             self._fail(job, f"couldn't start the Windows build: {err}")
             return

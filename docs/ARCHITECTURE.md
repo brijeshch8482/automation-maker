@@ -212,6 +212,7 @@ EXE = Engine (same for all, fully tested) + spec.json + templates/assets + optio
 - **Standard UI shell:** header -> first-time setup (settings) -> inputs form -> preview (if files change) -> Run -> result (open file/folder, undo).
 - **Block library v1:** `form.*`, `settings.*`, `counter.*`, `calc.*`, `pdf.render_template`, `pdf.merge/split/compress/watermark/encrypt`, `image.*`, `excel.read/write/combine/dedupe/compare/split/summary`, `convert.*`, `files.scan/rename/organize/find_duplicates`, `file.save`, `undo.*`.
 - **Custom-step context API** (`engine/custom_api.py`): read user-selected inputs, write only to the output folder, move only through the undo log; no delete, no subprocess, no network unless declared.
+- **Custom-step sandbox** (`engine/sandbox.py`): while generated code runs (module level included), a Python audit hook refuses writes outside the output folder, deletes, renames, starting programs, native libraries and (unless declared) network connections. It backs up the static rules in `tools.check_job`.
 - **Offline guard:** with `network.required = false`, sockets are blocked at startup, network libraries aren't bundled, and generated code importing `socket/urllib/requests/http*` fails the checks.
 - **Guide mode:** `app.exe --guide-mode out/` renders every screen with `sample_data`, saves screenshots, and the build produces `Guide.pdf` + HTML.
 - **Local data:** settings JSON + SQLite (counters, saved customers) in `%APPDATA%`, never sent anywhere.
@@ -221,8 +222,8 @@ EXE = Engine (same for all, fully tested) + spec.json + templates/assets + optio
 ## 9. Build & validation gates
 
 1. **Spec validation** (`tools.validate_spec`): schema, known blocks, allowed category, network rules. Run by `am-spec` before callback and by FastAPI on receipt.
-2. **Job checks on Linux** (`tools.check_job`, run inside the `am-build` session): Ruff, pytest with `sample_data`, Bandit, AST rules (forbidden imports/calls, file writes only via context API).
-3. **Windows Job 1 (no secrets):** PyInstaller build -> smoke test -> guide screenshots -> artifact + `report.json` (stage, command, test, bounded log).
+2. **Job checks on Linux** (`tools.check_job`, run inside the `am-build` session): folder layout, spec + sample files, AST rules (allowlisted imports, no dynamic code or dunder access), Ruff, Bandit, pytest with `sample_data`, the engine's smoke test.
+3. **Windows Job 1 (no secrets), pinned** to the commit that passed those checks and to the fingerprint of the spec the user confirmed (a later push or a changed spec fails at `validate`): PyInstaller build -> smoke test -> guide screenshots -> artifact + `report.json` (stage, command, test, bounded log).
 4. **Windows Job 2 (secrets, no generated code):** upload to R2 -> HMAC-signed callback.
 5. **Repair:** FastAPI fires `am-build` in `repair` mode with the report; max 2 repairs.
 6. **Only passing builds are downloadable.** Links expire.

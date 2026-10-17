@@ -176,7 +176,34 @@ Finished apps live in a **private** R2 bucket. Nobody gets a public link to it: 
 4. **First release.** CI publishes the catalog on every push to `main` (job *publish catalog*, after the tests and the four Windows builds pass): `catalog/<id>/<version>/<App>.zip`, `Guide.pdf`, and last `catalog/manifest.json`. After adding the secrets to the `catalog` environment, open the latest CI run on `main` › **Re-run all jobs**, or merge the next PR.
 5. **Check.** Open the site › any automation. Within five minutes of a release the button shows the size and version, for example "51 MB · version 1.0.0". Click it: the zip downloads, and the page shows the three steps to start the app. A custom app that finished building shows the same buttons on its page.
 
-## 7. Check the whole thing
+## 7. Custom apps (Claude routines)
+
+A custom app is designed by the **am-spec** routine and built by **am-build**, both Claude Code routines on your Claude subscription, working in automation-builds. The exact prompts and payloads are in [ROUTINES.md](ROUTINES.md). Do sections 5 and 6 first. Tokens from these steps go only into Render; never paste them into a chat or a file.
+
+1. **Sync automation-builds again.** automation-maker › Actions › *Sync automation-builds* › Run workflow (`main`). This brings `CLAUDE.md`, `docs/SPEC_GUIDE.md`, `examples/` and `tools/check_job` to automation-builds, which the routines read.
+2. **Cloud environment.** claude.ai/code › environment menu › Add environment `am-builder`:
+   - **Network access:** Custom › tick *Also include default list of common package managers* › add `makemyexe-api.onrender.com`.
+   - **Setup script:** the three lines in [ROUTINES.md §1](ROUTINES.md) (`uv sync ...`).
+   - **Environment variables:** none.
+3. **Routine `am-spec`.** claude.ai/code/routines › New routine:
+   - Name `am-spec`, repository **automation-builds** only, environment `am-builder`, **remove every connector**.
+   - Prompt: copy the `am-spec` block from [ROUTINES.md §3](ROUTINES.md) exactly.
+   - Trigger: Add another trigger › **API** › copy the URL › **Generate token** and copy it.
+   - Put them into **Render** › Environment as `ROUTINE_SPEC_URL` and `ROUTINE_SPEC_TOKEN`.
+4. **Routine `am-build`.** The same with the `am-build` prompt. Its URL and token go into Render as `ROUTINE_BUILD_URL` and `ROUTINE_BUILD_TOKEN`.
+5. **Only job branches.** automation-builds › Settings › Rules › Rulesets: the `main` ruleset from section 5 step 3 must exist, so a routine can push only `claude/job-*` branches.
+6. **Check the Render settings** before switching on:
+   - `CALLBACK_TOKEN_SECRET`: random, 32+ characters;
+   - `BUILD_CALLBACK_SECRET`: the same value as in the automation-builds `publish` environment;
+   - `BUILDS_GITHUB_TOKEN`: from section 5 step 7.
+
+   The API refuses to start in routine mode with a missing routine URL or a development secret, so a typo shows up at once in the Render logs.
+7. **Switch on.** Render › Environment › `PROVIDER` = `routine` › Save (Render redeploys).
+8. **Try it.** On the website, sign in › *Make a custom app* › describe a small task, for example "Count the words and lines in a text file and save a short report". The design appears in a few minutes, with a link to the routine session. Confirm it: the build takes 10–15 minutes, then the page shows **Download**. The same run from a terminal is in [ROUTINES.md §6](ROUTINES.md).
+
+If a job fails, its page shows why, and each attempt links to its routine session and Windows run. Limits while routines are in research preview: 30 runs an hour per routine, and every run counts toward your Claude plan's usage.
+
+## 8. Check the whole thing
 
 1. Open `https://makemyexe.pages.dev`. The catalog shows at once (it ships with the site). On an automation page the Download button may say "Waking up our server" for up to a minute if the API was asleep.
 2. **Sign in, all three ways:**
@@ -184,7 +211,7 @@ Finished apps live in a **private** R2 bucket. Nobody gets a public link to it: 
    - Sign out (the round account button, top right) › **Email code** tab › type the code you receive.
    - Sign out › **Continue with Google** › pick your account › you come back to the site, signed in.
    - **Forgot password?** › code › new password.
-3. **Submit a description.** With `PROVIDER=fake` no routine runs, so the job stays in "Designing" until the watchdog fails it after 15 minutes. That's expected until the routines are set up ([ROUTINES.md](ROUTINES.md)); then set `PROVIDER=routine` and fill in the `ROUTINE_*` variables.
+3. **Submit a description.** With `PROVIDER=fake` no routine runs, so the job stays in "Designing" until the watchdog fails it after 15 minutes. That's expected until the routines are set up (section 7).
 4. **Rotating a secret:** change it in the dashboard and redeploy. For `BUILD_CALLBACK_SECRET`, update automation-builds at the same time.
 
 ## Running the API image locally

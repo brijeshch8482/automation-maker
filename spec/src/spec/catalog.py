@@ -146,6 +146,15 @@ class FileSaveArgs(BlockArgs):
     name: TemplateStr
 
 
+class PdfFromFilesArgs(BlockArgs):
+    """Options come from inputs (usually select/checkbox fields); left out means the default."""
+
+    files: ValueRef
+    page_size: ValueRef | None = None  # "A4" (default), "Letter", or "Same as each photo"
+    margin: ValueRef | None = None  # "None", "Small" (default), "Normal"
+    smaller: ValueRef | None = None  # checkbox: smaller file (150 dpi, more compression)
+
+
 class FilesScanArgs(BlockArgs):
     folder: ValueRef
     # Lower-case extensions without the dot; empty means every file.
@@ -192,6 +201,15 @@ _BLOCKS = [
         "pdf.merge",
         "Merge the selected PDF files, in order, into one PDF. Originals are not changed.",
         PdfMergeArgs,
+        produces="PDF document",
+    ),
+    BlockDef(
+        "pdf.from_files",
+        "Make one PDF from photos, screenshots, scans (JPG, PNG, WebP, BMP, TIFF, GIF, HEIC) "
+        "and pages of existing PDFs, in the given order. Photos are turned upright, put on A4, "
+        "Letter or a page their own size, and scaled to print quality to keep the file small. "
+        "Originals are only read.",
+        PdfFromFilesArgs,
         produces="PDF document",
     ),
     BlockDef(

@@ -179,6 +179,7 @@ class SelectField(FieldWidget):
         super().__init__(field)
         self.combo = QComboBox()
         self.combo.setAccessibleName(field_label(field))
+        self.combo.setMinimumWidth(200)  # options of different lengths still line up
         self.combo.addItem("Choose…", "")
         for option in field.options:
             self.combo.addItem(option, option)

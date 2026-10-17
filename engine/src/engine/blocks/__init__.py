@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from engine.blocks import calc, counter, custom, files, pdf
+from engine.blocks import calc, counter, custom, files, makepdf, pdf
 from engine.context import RunContext
 
 BlockImpl = Callable[[RunContext, Any], Any]
@@ -15,6 +15,7 @@ IMPLEMENTATIONS: dict[str, BlockImpl] = {
     "calc.line_totals": calc.line_totals,
     "pdf.render_template": pdf.render_template,
     "pdf.merge": pdf.merge,
+    "pdf.from_files": makepdf.from_files,
     "file.save": files.save,
     "files.scan": files.scan,
     "files.rename": files.rename,

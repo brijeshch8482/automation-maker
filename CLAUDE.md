@@ -14,6 +14,12 @@ Web product where users pick a ready-made automation or describe a custom one, a
 ## Layout
 `spec/` models + block catalog · `engine/` desktop runtime (PySide6) · `tools/` validate_spec, check_job · `automations/` catalog · `build/` packaging + guide · `api/` FastAPI · `web/` React · `builds-repo/` source for the `automation-builds` repo.
 
+## Verification (every PR)
+- Run the full test suite headless (`QT_QPA_PLATFORM=offscreen`) before opening a PR.
+- **Any UI change must ship screenshots.** Render each affected screen offscreen with the automation's `sample_data` (the same code path as guide mode, `QWidget.grab()`), save the PNGs under `docs/screenshots/<automation-id>/`, **open and look at them yourself** to check layout, labels, clipping and empty states, then embed them in the PR description.
+- For non-UI work, include in the PR description: the commands run, the test results, and sample output (e.g. the generated PDF rendered to PNG, or the rename preview table).
+- CI runs on both `ubuntu-latest` and `windows-latest`. The Windows job also renders the screenshots and uploads them as an artifact, so Windows rendering gets checked on every PR.
+
 ## Development notes
 - EXEs target Windows 10/11. Cloud dev is Linux: run Qt tests with `QT_QPA_PLATFORM=offscreen`; real Windows builds run in GitHub Actions.
 - Python 3.12, Ruff for lint/format, pytest for tests. Every block and every catalog automation needs tests that use its `sample_data`.

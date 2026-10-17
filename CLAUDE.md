@@ -1,12 +1,14 @@
 # MakeMyEXE
 
-Web product where users pick a ready-made automation or describe a custom one, and we build a Windows EXE that runs offline on their own PC, with a screenshot guide. Read `docs/ARCHITECTURE.md` before starting any phase; read `docs/ROUTINES.md` before touching generation, callbacks or the build workflow.
+Web product where users pick a ready-made automation or describe a custom one, and we build a Windows EXE that runs offline on their own PC, with a screenshot guide. Delivery is moving to one shared Runner + signed app packs merged at download (`docs/ARCHITECTURE.md` §8, Phases 2b/2c); until 2b ships, the per-automation PyInstaller pipeline stays live. Read `docs/ARCHITECTURE.md` before starting any phase; read `docs/ROUTINES.md` before touching generation, callbacks or the build workflow.
 
 ## Rules that must never be broken
 - **Format, not data:** the AI and server never need user data; real data is entered only inside the EXE.
 - **Offline by default:** no network code in an automation unless its spec declares `network.required = true` with domains.
 - **Never modify originals, never delete user files.** Write to new files/folders; moves and renames go through the undo log.
 - **No telemetry or auto-update calls in the EXE.**
+- **Only signed packs run; nothing is downloaded or installed on the user's PC at runtime.** The Runner verifies the pack signature and every pack and layer hash before loading anything (`docs/ARCHITECTURE.md` §8.3). Signing keys live only in the `catalog` / `publish` environments.
+- **Custom code imports only the stdlib, `engine.custom_api`, the Runner lock and the job's resolved layers.** New libraries go through the policy gate (§8.5), never around it; a policy reject never falls back to the standalone build.
 - **AutomationSpec is the source of truth** (`spec/`). Change the models there first, then regenerate JSON Schema and TS types.
 - **Generated code never runs in a CI job that has secrets.** The Windows workflow is dispatched on `main` and copies only `jobs/<id>/` from job branches.
 - **Secrets only in GitHub environments limited to `main`** (`catalog`, `sync`, and `publish` in automation-builds), never repository secrets; the job that runs generated code gets no secrets and no cache (`tests/packaging/test_workflow_secrets.py`, `docs/ROUTINES.md` §5).

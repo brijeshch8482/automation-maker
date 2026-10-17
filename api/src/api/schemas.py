@@ -174,7 +174,8 @@ class RoutineCallback(BaseModel):
     questions: list[str] = Field(default_factory=list, max_length=20)
     # build / repair
     branch: str | None = Field(default=None, pattern=r"^claude/job-job_[0-9A-Z]{26}$")
-    commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{7,64}$")
+    # The full SHA: the Windows build refuses the branch unless its head is this commit.
+    commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     used_custom_step: bool | None = None
     log_tail: str | None = Field(default=None, max_length=20_000)
 

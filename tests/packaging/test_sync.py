@@ -32,6 +32,12 @@ def test_sync_copies_the_snapshot_and_keeps_other_files(tmp_path):
         "pyproject.toml",
         "README.md",
         ".gitignore",
+        "CLAUDE.md",
+        "docs/SPEC_GUIDE.md",
+        "examples/catalog/invoice-generator/spec.json",
+        "examples/custom/word-count/custom_step.py",
+        "examples/custom/word-count/test_custom_step.py",
+        "tools/check_job/__main__.py",
     ):
         assert (target / path).is_file(), path
     assert not (target / "engine" / "old_module.py").exists()  # managed paths are replaced
@@ -39,8 +45,9 @@ def test_sync_copies_the_snapshot_and_keeps_other_files(tmp_path):
     assert (target / "ENGINE_VERSION").read_text() == "engine-v0.2.0 0123456789ab\n"
     # Only what a build needs: no API code, web, catalog, tests or caches.
     assert sorted(p.name for p in (target / "api").iterdir()) == ["pyproject.toml"]
-    for absent in ("web", "automations", "tests", "docs", ".github/workflows/ci.yml"):
+    for absent in ("web", "automations", "tests", ".github/workflows/ci.yml"):
         assert not (target / absent).exists(), absent
+    assert [p.name for p in (target / "docs").iterdir()] == ["SPEC_GUIDE.md"]
     assert not list(target.rglob("__pycache__"))
 
 

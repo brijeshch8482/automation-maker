@@ -14,6 +14,7 @@ build = [
     "pyinstaller>=6.11",
 ]
 dev = [
+    "bandit>=1.8",
     "jsonschema>=4.23",
     "pypdfium2>=4.30",
     "pytest>=8.3",

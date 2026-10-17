@@ -1,7 +1,8 @@
 import pytest
 
 from api.providers import FireRejected, FireUnknown, RetryLater
-from tests.api.conftest import ALICE, BOB, invoice_spec
+from spec.fingerprint import spec_sha256
+from tests.api.conftest import ALICE, BOB, COMMIT, invoice_spec
 
 pytestmark = pytest.mark.anyio
 
@@ -189,6 +190,25 @@ async def test_generation_done_dispatches_windows_build(ctx):
     job = await ctx.get_job(job_id)
     assert job["state"] == "building"
     assert ctx.dispatcher.calls == [(job_id, f"claude/job-{job_id}", 0)]
+    # Pinned to the commit the routine checked and the spec the user confirmed.
+    assert ctx.dispatcher.pins == [(COMMIT, spec_sha256(job["spec"]))]
+
+
+async def test_generation_result_must_name_the_full_commit(ctx):
+    job_id = await ctx.create_job()
+    await ctx.spec_ready(job_id)
+    assert (await ctx.client.post(f"/jobs/{job_id}/confirm", headers=ALICE)).status_code == 202
+    branch = f"claude/job-{job_id}"
+    short = await ctx.routine_callback(
+        job_id, mode="build", attempt=0, status="ok", branch=branch, commit_sha="abc1234"
+    )
+    assert short.status_code == 422
+    r = await ctx.routine_callback(job_id, mode="build", attempt=0, status="ok", branch=branch)
+    assert r.status_code == 204
+    job = await ctx.get_job(job_id)
+    assert job["state"] == "failed"
+    assert "no branch or commit" in job["failure_reason"]
+    assert ctx.dispatcher.calls == []
 
 
 async def test_callback_with_bad_branch_is_rejected(ctx):
@@ -196,7 +216,7 @@ async def test_callback_with_bad_branch_is_rejected(ctx):
     await ctx.spec_ready(job_id)
     await ctx.client.post(f"/jobs/{job_id}/confirm", headers=ALICE)
     r = await ctx.routine_callback(
-        job_id, mode="build", attempt=0, status="ok", branch="main", commit_sha="abc1234"
+        job_id, mode="build", attempt=0, status="ok", branch="main", commit_sha=COMMIT
     )
     assert r.status_code == 422
     assert ctx.dispatcher.calls == []

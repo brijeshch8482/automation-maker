@@ -1,6 +1,7 @@
 """The only API generated custom steps may use (ARCHITECTURE.md §8).
 
-Read the user's inputs, write new files only into the output folder. No delete, no overwrite,
+Read the user's inputs; produce a Document for file.save, or write new files only into the
+output folder. No delete, no overwrite,
 no subprocess and no network (tools.check_job enforces the imports).
 """
 
@@ -12,6 +13,7 @@ from typing import Any
 from engine.context import RunContext
 from engine.errors import EngineError
 from engine.fileutil import safe_filename, write_new_file
+from engine.values import Document
 
 
 class CustomContext:
@@ -33,6 +35,13 @@ class CustomContext:
         if not any(_within(target, allowed) for allowed in self._selected_paths()):
             raise EngineError("custom step tried to read a file the user did not select")
         return target.read_bytes()
+
+    def document(self, data: bytes, extension: str) -> Document:
+        """A file made in memory, for a later file.save step to save where the user chose.
+        The usual way to produce output: return ctx.document(...) and let file.save name it."""
+        if not isinstance(data, bytes) or not extension.isalnum():
+            raise EngineError("a custom step's document needs bytes and an extension like 'txt'")
+        return Document(data, extension.lower())
 
     def save_bytes(self, filename: str, data: bytes) -> Path:
         """Save a NEW file in the output folder and return its path."""

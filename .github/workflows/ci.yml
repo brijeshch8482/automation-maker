@@ -115,6 +115,48 @@ jobs:
             dist/report.json
           if-no-files-found: warn
 
+  # A job with a custom step (tests/fixtures/jobs/word-count), packaged exactly as automation-builds
+  # packages a custom job: pinned to its spec fingerprint, with engine.sandbox inside the EXE.
+  # Not part of the catalog: its artifact is job-*, never app-*.
+  package-custom:
+    name: package (custom step)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: "1"
+      JOB: tests/fixtures/jobs/word-count
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install (engine and PyInstaller only, like automation-builds)
+        run: |
+          uv sync --locked --no-dev --package makemyexe-engine
+          uv sync --locked --no-dev --only-group build --inexact
+
+      - name: Package, smoke test, launch check, guide (pinned to the spec)
+        run: |
+          SPEC_SHA256=$(uv run --no-sync python -m spec.fingerprint "$JOB/spec.json")
+          uv run --no-sync python -m build.package "$JOB" --out dist --launch-check --expect-spec-sha256 "$SPEC_SHA256"
+
+      - name: Upload the app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-word-count
+          path: |
+            dist/*.zip
+            dist/Guide.pdf
+            dist/report.json
+          if-no-files-found: warn
+
   # On main: put the tested apps from the package jobs into R2, then catalog/manifest.json, so
   # the website's Download buttons serve them (build/publish_catalog.py). The only job with R2
   # secrets; it runs none of the packaged code, it only uploads the files. The secrets live in

@@ -1,12 +1,16 @@
 """Package one automation as a Windows app: folder + Guide.pdf + zip (docs/ROUTINES.md §5).
 
     python -m build.package automations/make-pdf --out dist/ [--launch-check]
+        [--expect-spec-sha256 HEX]
 
 Stages: validate, package (PyInstaller --onedir, then trim Qt), smoke_test (the packaged app on
 its sample_data), launch_check (opens the real window; needs a desktop), guide (screenshots from
 the packaged app), guide_pdf, zip. The result is always written to <out>/report.json; on a
 failure it names the stage, the command and the end of the log, which is what the repair
 routine reads. Exit code 0 when every stage passed, else 1.
+
+With --expect-spec-sha256 (custom jobs: the fingerprint of the spec the user confirmed, from
+spec.fingerprint), validate fails unless spec.json is exactly that spec.
 
 The automation folder holds spec.json, optional samples/ and optional custom_step.py. Nothing
 else from it is bundled (tests and caches stay out).
@@ -30,6 +34,7 @@ from typing import Any
 
 from build.guide_pdf import make_guide
 from engine.blocks import block_module
+from spec.fingerprint import spec_sha256
 from spec.models import AutomationSpec
 from spec.validate import validate_spec
 
@@ -233,8 +238,11 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 class Packager:
-    def __init__(self, app_dir: Path, out: Path, launch_check: bool) -> None:
+    def __init__(
+        self, app_dir: Path, out: Path, launch_check: bool, expect_spec_sha256: str | None = None
+    ) -> None:
         self.app_dir = app_dir.resolve()
+        self.expect_spec_sha256 = expect_spec_sha256
         self.out = out.resolve()
         self.work = self.out / "work"
         self.launch_check = launch_check
@@ -283,6 +291,12 @@ class Packager:
             data = json.loads(spec_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as err:
             raise StageFailed("validate", command, f"spec.json could not be read: {err}") from err
+        if self.expect_spec_sha256 and spec_sha256(data) != self.expect_spec_sha256.lower():
+            raise StageFailed(
+                "validate",
+                "spec fingerprint check",
+                "spec.json is not the spec the user confirmed; write it exactly as given",
+            )
         spec, issues = validate_spec(data)
         if issues or spec is None:
             raise StageFailed("validate", command, "\n".join(str(i) for i in issues))
@@ -385,8 +399,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--launch-check", action="store_true", help="also open the real window (needs a desktop)"
     )
+    parser.add_argument(
+        "--expect-spec-sha256", metavar="HEX", help="fail unless spec.json has this fingerprint"
+    )
     args = parser.parse_args(argv)
-    report = Packager(args.app_dir, args.out, args.launch_check).run()
+    report = Packager(args.app_dir, args.out, args.launch_check, args.expect_spec_sha256).run()
     summary = {k: getattr(report, k) for k in ("status", "automation", "exe", "stage", "sizes_mb")}
     print(json.dumps(summary, indent=2))
     if report.status != "passed":

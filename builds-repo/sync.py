@@ -26,6 +26,12 @@ MANAGED = {
     # The workspace lists api; uv needs its pyproject.toml, never its code.
     "api/pyproject.toml": "api/pyproject.toml",
     "builds-repo/README.md": "README.md",
+    # For the am-spec / am-build routines, which work in automation-builds: their instructions,
+    # the spec guide, and examples (the catalog, plus a job with a custom step).
+    "builds-repo/CLAUDE.md": "CLAUDE.md",
+    "docs/SPEC_GUIDE.md": "docs/SPEC_GUIDE.md",
+    "automations": "examples/catalog",
+    "tests/fixtures/jobs/word-count": "examples/custom/word-count",
     "builds-repo/gitignore": ".gitignore",
     "builds-repo/.github/workflows/build.yml": ".github/workflows/build.yml",
 }

@@ -76,3 +76,40 @@ def test_sync_uses_the_sync_environment():
     sync = jobs(REPO_ROOT / ".github" / "workflows" / "sync-builds.yml")["sync"]
     assert sync["environment"] == "sync"
     assert "secrets.BUILDS_SYNC_TOKEN" in text(sync)
+
+
+# --- Artifact storage (GitHub Free: 500 MB in all, docs/DEPLOY.md §10) ----------------------
+
+MAX_RETENTION_DAYS = 7
+
+
+def upload_steps(path: Path):
+    for name, job in jobs(path).items():
+        for step in job.get("steps", []):
+            if step.get("uses", "").startswith("actions/upload-artifact"):
+                yield name, step
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.relative_to(REPO_ROOT).as_posix())
+def test_every_artifact_expires_within_a_week(path):
+    for name, step in upload_steps(path):
+        days = step["with"].get("retention-days")
+        assert days is not None and int(days) <= MAX_RETENTION_DAYS, f"{path.name}:{name}"
+
+
+def test_pull_requests_upload_no_zips():
+    # Zips (tens of MB each) are kept only on pushes to main; a PR keeps reports.
+    ci = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+    for name, step in upload_steps(ci):
+        if ".zip" in step["with"]["path"]:
+            assert "github.event_name == 'push'" in step.get("if", ""), f"{name}: {step['name']}"
+
+
+def test_artifact_cleanup_is_manual_and_uses_no_secrets():
+    path = REPO_ROOT / ".github" / "workflows" / "clean-artifacts.yml"
+    workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert set(workflow[True]) == {"workflow_dispatch"}  # never on a schedule or a push
+    (job,) = workflow["jobs"].values()
+    assert job["permissions"] == {"actions": "write"}
+    assert not secrets_used(job)
+    assert not any("actions/checkout" in s.get("uses", "") for s in job["steps"])

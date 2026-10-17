@@ -75,6 +75,7 @@ jobs:
           name: screenshots-windows
           path: screenshots-windows/
           if-no-files-found: error
+          retention-days: 3
 
   # Every catalog automation packaged the way automation-builds does it (build.yml): the EXE
   # folder, its smoke test, a launch check on the real Windows desktop, Guide.pdf and the zip.
@@ -104,8 +105,10 @@ jobs:
       - name: Package, smoke test, launch check, guide
         run: uv run --no-sync python -m build.package automations/${{ matrix.automation }} --out dist --launch-check
 
-      - name: Upload the app
-        if: always()
+      # Artifact storage is 500 MB on GitHub Free (docs/DEPLOY.md §10). The zips are only kept
+      # on main, where publish catalog takes them minutes later; a PR keeps just the report.
+      - name: Upload the app (main)
+        if: always() && github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.automation }}
@@ -114,6 +117,16 @@ jobs:
             dist/Guide.pdf
             dist/report.json
           if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the report (PR)
+        if: always() && github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ matrix.automation }}
+          path: dist/report.json
+          if-no-files-found: warn
+          retention-days: 3
 
   # Runner + packs (docs/ARCHITECTURE.md §8, Phase 2b). Every app is checked on Linux and its
   # guide made (build.pack_check), then packed and signed with a throwaway key made in this job;
@@ -164,6 +177,7 @@ jobs:
             dist/checks/*/Guide.pdf
             dist/checks/*/report.json
           if-no-files-found: error
+          retention-days: 1 # only the runner job needs it, minutes later
 
   runner:
     name: runner (Windows)
@@ -199,8 +213,8 @@ jobs:
           for pack in packs/packs/*/app.mmx; do args+=(--check-pack "$pack"); done
           uv run --no-sync python -m build.runner --out dist/runner --extra-keys packs/ci-keys.json --launch-check "${args[@]}"
 
-      - name: Upload the Runner
-        if: always()
+      - name: Upload the Runner (main)
+        if: always() && github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: runner
@@ -209,6 +223,15 @@ jobs:
             dist/runner/report.json
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Upload the Runner report (PR)
+        if: always() && github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-report
+          path: dist/runner/report.json
+          if-no-files-found: warn
+          retention-days: 3
 
   # A job with a custom step (tests/fixtures/jobs/word-count), packaged exactly as automation-builds
   # packages a custom job: pinned to its spec fingerprint, with engine.sandbox inside the EXE.
@@ -241,8 +264,8 @@ jobs:
           SPEC_SHA256=$(uv run --no-sync python -m spec.fingerprint "$JOB/spec.json")
           uv run --no-sync python -m build.package "$JOB" --out dist --launch-check --expect-spec-sha256 "$SPEC_SHA256"
 
-      - name: Upload the app
-        if: always()
+      - name: Upload the app (main)
+        if: always() && github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: job-word-count
@@ -251,6 +274,16 @@ jobs:
             dist/Guide.pdf
             dist/report.json
           if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the report (PR)
+        if: always() && github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-word-count
+          path: dist/report.json
+          if-no-files-found: warn
+          retention-days: 3
 
   # On main: put the tested apps from the package jobs into R2, then catalog/manifest.json, so
   # the website's Download buttons serve them (build/publish_catalog.py). The only job with R2

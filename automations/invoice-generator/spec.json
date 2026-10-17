@@ -2,6 +2,7 @@
   "id": "invoice-generator",
   "version": "1.0.0",
   "title": "Invoice Generator",
+  "description": "Make numbered GST invoices as PDFs from your customer and item details. Totals and tax are worked out for you.",
   "category": "documents",
   "network": { "required": false, "domains": [] },
   "settings": [

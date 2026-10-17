@@ -193,6 +193,8 @@ class AutomationSpec(_Model):
     id: str = Field(pattern=ID_PATTERN, max_length=64)
     version: str = Field(pattern=SEMVER_PATTERN)
     title: str = Field(min_length=1, max_length=80)
+    # One or two sentences for the catalog card and automation page.
+    description: str = Field(default="", max_length=500)
     category: Category
     network: Network = Field(default_factory=Network)
     settings: list[SpecField] = Field(default_factory=list)

@@ -999,6 +999,12 @@
       "title": "Title",
       "type": "string"
     },
+    "description": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Description",
+      "type": "string"
+    },
     "category": {
       "enum": [
         "documents",

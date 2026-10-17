@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     max_repairs: int = 2
     unconfirmed_expiry_days: int = 30
     description_retention_days: int = 30
+    # Routine and build logs (attempt details, the last build report) of finished jobs.
+    build_log_retention_days: int = 30
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -90,3 +90,5 @@ services:
         sync: false
       - key: DESCRIPTION_RETENTION_DAYS
         sync: false
+      - key: BUILD_LOG_RETENTION_DAYS
+        sync: false

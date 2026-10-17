@@ -65,6 +65,8 @@ class RunnerReport:
     packs: list[dict[str, Any]] = field(default_factory=list)
     sizes_mb: dict[str, float] = field(default_factory=dict)
     over_budget: list[str] = field(default_factory=list)
+    # The biggest parts of the folder, so trimming starts where the megabytes are.
+    largest_mb: dict[str, float] = field(default_factory=dict)
 
     def write(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -166,6 +168,7 @@ class RunnerBuild:
         self.report.sizes_mb["before_trim"] = folder_mb(folder)
         trim(folder / "_internal")
         self.report.sizes_mb["folder"] = folder_mb(folder)
+        self.report.largest_mb = largest_parts(folder)
         return folder
 
     def _exe(self, stage: str, exe: Path, args: list[str], qt: str | None = "offscreen"):
@@ -229,6 +232,19 @@ class RunnerBuild:
         return target
 
 
+def largest_parts(folder: Path, count: int = 25) -> dict[str, float]:
+    """Sizes by part: files and folders two levels below _internal/ (PySide6/Qt6Gui.dll)."""
+    sizes: dict[str, int] = {}
+    for path in folder.rglob("*"):
+        if not path.is_file() or path.is_symlink():
+            continue
+        parts = path.relative_to(folder).parts
+        key = "/".join(parts[:3] if parts[0] == "_internal" else parts[:1])
+        sizes[key] = sizes.get(key, 0) + path.stat().st_size
+    top = sorted(sizes.items(), key=lambda item: -item[1])[:count]
+    return {key: round(size / 1_000_000, 1) for key, size in top}
+
+
 def _sep() -> str:
     return ";" if sys.platform == "win32" else ":"
 
@@ -257,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--launch-check", action="store_true", help="needs a desktop")
     args = parser.parse_args(argv)
     report = RunnerBuild(args.out, args.extra_keys, args.check_pack, args.launch_check).run()
-    keys = ("status", "stage", "packs", "sizes_mb", "over_budget")
+    keys = ("status", "stage", "packs", "sizes_mb", "over_budget", "largest_mb")
     print(json.dumps({k: getattr(report, k) for k in keys}, indent=2))
     if report.status != "passed":
         print(f"\n{report.stage} failed: {report.command}\n{report.log_tail}", file=sys.stderr)

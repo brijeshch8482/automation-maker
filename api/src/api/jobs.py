@@ -324,6 +324,26 @@ class JobService:
             job.description = None
             changed += 1
 
+        # Logs are only for debugging a recent job; the 500 MB free database stays small.
+        log_cutoff = now - timedelta(days=s.build_log_retention_days)
+        attempts = await session.scalars(
+            select(JobAttempt).where(
+                JobAttempt.detail.is_not(None),
+                JobAttempt.closed_at.is_not(None),
+                JobAttempt.closed_at < log_cutoff,
+            )
+        )
+        for attempt in list(attempts):
+            attempt.detail = None
+            changed += 1
+        finished = await session.scalars(
+            select(Job).where(Job.state.in_(list(TERMINAL)), Job.state_changed_at < log_cutoff)
+        )
+        for job in list(finished):
+            if job.last_report:
+                job.last_report = None
+                changed += 1
+
         await session.commit()
         return changed
 

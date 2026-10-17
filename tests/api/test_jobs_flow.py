@@ -424,3 +424,39 @@ async def test_watchdog_expires_unconfirmed_specs_and_drops_descriptions(ctx):
     assert job["state"] == "expired"
     assert job["description"] is None
     assert job["spec"] is not None  # specs are kept
+
+
+async def test_watchdog_drops_old_build_logs_but_keeps_the_outcome(ctx):
+    from sqlalchemy import select
+
+    from api.db import Job, JobAttempt
+
+    job_id = await ctx.create_job()
+    await ctx.to_building(job_id)
+    report = {"stage": "smoke_test", "command": "x", "test": None, "log_tail": "boom " * 100}
+    for attempt in range(3):  # two repairs, then failed
+        await ctx.build_callback(job_id=job_id, attempt=attempt, status="failed", report=report)
+        if attempt < 2:
+            await ctx.generated(job_id, attempt=attempt + 1, mode="repair")
+
+    async with ctx.session() as session:
+        job = await session.get(Job, job_id)
+        assert job.state == "failed" and job.last_report
+        for attempt in (await session.scalars(select(JobAttempt))).all():
+            attempt.detail = "routine log tail"
+        await session.commit()
+    ctx.clock.advance(days=29)
+    await run_watchdog(ctx)
+    async with ctx.session() as session:
+        assert (await session.get(Job, job_id)).last_report
+        assert all((await session.scalars(select(JobAttempt.detail))).all())
+    ctx.clock.advance(days=2)
+    await run_watchdog(ctx)
+    async with ctx.session() as session:
+        job = await session.get(Job, job_id)
+        assert job.last_report is None
+        details = (await session.scalars(select(JobAttempt.detail))).all()
+        assert all(d is None for d in details)
+    kept = await ctx.get_job(job_id)
+    assert kept["state"] == "failed" and kept["failure_reason"]  # the outcome stays
+    assert all(a["session_url"] for a in kept["attempts"])

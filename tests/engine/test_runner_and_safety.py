@@ -125,3 +125,27 @@ def test_cli_bad_spec(tmp_path, capsys, restore_network):
 def test_step_errors_keep_engine_messages():
     err = StepError(1, "calc.line_totals", EngineError("row 1: qty is empty"))
     assert str(err) == "Step 2 (calc.line_totals): row 1: qty is empty"
+
+
+def test_store_closes_every_connection(tmp_path, monkeypatch):
+    """On Windows an open SQLite file can't be deleted (guide/smoke temp folders, user cleanup)."""
+    import sqlite3
+
+    import engine.storage as storage
+
+    opened = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(storage.sqlite3, "connect", tracking_connect)
+    store = Store("x", root=tmp_path)
+    store.set_counter("n", 1)
+    assert store.counter_value("n") == 1
+    assert len(opened) == 3
+    for conn in opened:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            conn.execute("SELECT 1")

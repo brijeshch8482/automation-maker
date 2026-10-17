@@ -6,6 +6,8 @@ import json
 import os
 import sqlite3
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -35,8 +37,16 @@ class Store:
         with self._connect() as db:
             db.execute("CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER)")
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self._db)
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Commit and CLOSE. sqlite3's own context manager only commits, which leaves the file
+        open, and on Windows an open file can't be deleted or moved."""
+        db = sqlite3.connect(self._db)
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     # --- settings ---
 

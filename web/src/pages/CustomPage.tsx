@@ -1,15 +1,40 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 
-import { findPii, maskPii, PII_LABELS, type PiiKind } from "../lib/pii";
+import { createJob, jobsAvailable } from "../api";
+import { useAuth } from "../auth";
+import PiiNotice, { hasPii } from "../components/PiiNotice";
+import { Button, ErrorText } from "../components/ui";
 
 const EXAMPLE =
   "Every month I get a folder of vendor bills as PDFs. I want one Excel sheet listing vendor " +
   "name, bill number, date and amount from each bill.";
+const MIN_LENGTH = 10;
 
 export default function CustomPage() {
-  const [description, setDescription] = useState("");
-  const matches = useMemo(() => findPii(description), [description]);
-  const kinds = [...new Set(matches.map((m) => m.kind))] as PiiKind[];
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { session, mode } = useAuth();
+  const prefill = (location.state as { description?: string } | null)?.description ?? "";
+  const [description, setDescription] = useState(prefill);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  const available = jobsAvailable() && mode !== "none";
+  const blocked = hasPii(description);
+  const tooShort = description.trim().length < MIN_LENGTH;
+
+  const submit = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      const id = await createJob(description.trim());
+      navigate(`/jobs/${id}`);
+    } catch (err) {
+      setError(err);
+      setSending(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl">
@@ -20,7 +45,13 @@ export default function CustomPage() {
         your real data inside the app, on your own PC.
       </p>
 
-      <form className="mt-6" onSubmit={(e) => e.preventDefault()}>
+      <form
+        className="mt-6"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (available && session && !blocked && !tooShort && !sending) void submit();
+        }}
+      >
         <label htmlFor="description" className="block text-sm font-medium text-slate-800">
           What should it do?
         </label>
@@ -32,53 +63,31 @@ export default function CustomPage() {
           placeholder={EXAMPLE}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          aria-describedby={matches.length ? "pii-warning" : undefined}
+          aria-describedby={blocked ? "pii-warning" : undefined}
         />
-
-        {matches.length > 0 && (
-          <div
-            id="pii-warning"
-            role="alert"
-            className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-          >
-            <p className="font-semibold">This looks like real personal or business data</p>
-            <p className="mt-1">
-              We found {listOf(kinds.map((k) => PII_LABELS[k]))}. Replace each one with a description
-              of the field, for example "[phone number]".
-            </p>
-            <ul className="mt-2 flex flex-wrap gap-1.5">
-              {matches.map((m) => (
-                <li key={`${m.start}-${m.end}`} className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-xs">
-                  {m.text}
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className="mt-3 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-500"
-              onClick={() => setDescription(maskPii(description, matches))}
-            >
-              Mask all
-            </button>
-          </div>
-        )}
+        <PiiNotice id="pii-warning" text={description} onMask={setDescription} />
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled
-            className="cursor-not-allowed rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-500"
-          >
-            Design my automation
-          </button>
-          <p className="text-sm text-slate-500">Custom builds open soon.</p>
+          {available && !session ? (
+            <Link
+              to="/login?next=/custom"
+              state={{ description }}
+              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+            >
+              Sign in to continue
+            </Link>
+          ) : (
+            <Button type="submit" disabled={!available || blocked || tooShort || sending}>
+              {sending ? "Sending…" : "Design my automation"}
+            </Button>
+          )}
+          {!available && <p className="text-sm text-slate-500">Custom builds open soon.</p>}
+          {available && blocked && (
+            <p className="text-sm text-amber-800">Mask the highlighted details to continue.</p>
+          )}
         </div>
+        <ErrorText error={error} />
       </form>
     </div>
   );
-}
-
-function listOf(items: string[]): string {
-  if (items.length <= 1) return items.join("");
-  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }

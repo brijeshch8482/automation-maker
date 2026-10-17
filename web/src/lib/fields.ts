@@ -54,7 +54,7 @@ export function inputsOf(spec: AutomationSpec): SpecField[] {
   return spec.inputs ?? [];
 }
 
-export function isOnline(spec: AutomationSpec): boolean {
+export function isOnline(spec: Pick<AutomationSpec, "network">): boolean {
   return spec.network?.required === true;
 }
 

@@ -1,7 +1,7 @@
 import { isOnline } from "../lib/fields";
 import type { AutomationSpec } from "../types/spec";
 
-export default function NetworkBadge({ spec }: { spec: AutomationSpec }) {
+export default function NetworkBadge({ spec }: { spec: Pick<AutomationSpec, "network"> }) {
   if (isOnline(spec)) {
     const domains = spec.network?.domains ?? [];
     return (

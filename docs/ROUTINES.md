@@ -135,6 +135,7 @@ Your job input is the JSON inside the routine-fire-payload block. Process it as 
 Rules for every mode:
 - Only create or change files under jobs/<job_id>/. Never edit engine/, spec/, tools/, build/, .github/, or anything outside that folder.
 - Custom code may use only the context API in engine/custom_api.py. No subprocess, no file deletion, no network code unless spec.network.required is true.
+- Custom code may import only the Python standard library, engine.custom_api, the libraries bundled in the Runner (build/runner.lock) and third-party libraries you list in jobs/<job_id>/requirements.txt (names only, one per line). Prefer, in order: stdlib, Runner libraries, libraries in build/libs.toml. Add a new library only if the task cannot be done without it.
 - Send exactly one callback at the end; if it fails or times out, retry the same request up to 3 times, 30 seconds apart (the API may be waking up).
 
 mode "build":
@@ -143,7 +144,7 @@ mode "build":
 3. If the spec contains a custom.step, write jobs/<job_id>/custom_step.py and jobs/<job_id>/test_custom_step.py (tests use spec.sample_data).
 4. Run: python -m tools.check_job jobs/<job_id>. If it fails, fix and rerun, at most 3 runs in total.
 5. If checks pass: commit, push the branch, then POST to callback_url with header "Authorization: Bearer <callback_token>":
-   {"job_id", "mode", "attempt", "status": "ok", "branch", "commit_sha", "used_custom_step": true|false}
+   {"job_id", "mode", "attempt", "status": "ok", "branch", "commit_sha", "used_custom_step": true|false, "requires": [names from requirements.txt, or empty]}
    If checks still fail: do not push. POST {"job_id", "mode", "attempt", "status": "failed", "reason", "log_tail": "<last 100 lines>"}.
 
 mode "repair":
@@ -182,6 +183,8 @@ When `status` is `failed`, `artifact_key` and `guide_key` are null and `report` 
 ---
 
 ## 5. Windows workflow dispatch
+
+> **Changing in Phase 2b/2c** (`ARCHITECTURE.md` §8–9): Job 1 becomes a Linux pack build, Job 2 signs the pack, `layer.yml` builds library layers through the policy gate, and a library rejection comes back as a repair fire with stage `library`. The PR that implements 2b updates this section and the saved routine prompts together.
 
 FastAPI (GitHub token with `actions:write` on `automation-builds` only):
 

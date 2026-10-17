@@ -260,9 +260,9 @@ def test_missing_or_broken_pack(tmp_path, trusted):
 def make_layer(app_dir: Path) -> dict:
     folder = app_dir / "libs" / "tinylib-1.0"
     (folder / "tinylib").mkdir(parents=True)
-    (folder / "tinylib" / "__init__.py").write_text("VALUE = 42\n")
+    (folder / "tinylib" / "__init__.py").write_bytes(b"VALUE = 42\n")
     record = {"tinylib/__init__.py": hashlib.sha256(b"VALUE = 42\n").hexdigest()}
-    (folder / "RECORD.json").write_text(json.dumps(record))
+    (folder / "RECORD.json").write_bytes(json.dumps(record).encode())
     digest = hashlib.sha256((folder / "RECORD.json").read_bytes()).hexdigest()
     return {"dist": "tinylib", "version": "1.0", "record_sha256": digest}
 
@@ -275,11 +275,11 @@ def test_layers_are_verified_file_by_file(tmp_path, key, trusted):
     assert verified.layer_dirs == [tmp_path / "libs" / "tinylib-1.0"]
 
     init = tmp_path / "libs" / "tinylib-1.0" / "tinylib" / "__init__.py"
-    init.write_text("VALUE = 666\n")
+    init.write_bytes(b"VALUE = 666\n")
     with pytest.raises(PackError, match="was changed"):
         verify_pack(path, trusted, tmp_path)
-    init.write_text("VALUE = 42\n")
-    (init.parent / "extra.py").write_text("")
+    init.write_bytes(b"VALUE = 42\n")
+    (init.parent / "extra.py").write_bytes(b"")
     with pytest.raises(PackError, match="was changed"):
         verify_pack(path, trusted, tmp_path)
     shutil.rmtree(tmp_path / "libs")

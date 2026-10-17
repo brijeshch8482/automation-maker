@@ -1,0 +1,10 @@
+# Deploy: docs/DEPLOY.md §11. The Worker only reads the bucket (binding, no R2 keys) and needs
+# one secret, DOWNLOAD_TOKEN_SECRET (the same value as in the API): `wrangler secret put`.
+name = "makemyexe-download"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "makemyexe-builds"

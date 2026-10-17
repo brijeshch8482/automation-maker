@@ -233,7 +233,12 @@ One JSON document per automation, defined as Pydantic models in `spec/` and expo
 > - the Linux app check (`build/pack_check.py`);
 > - CI: `packs (Linux)` checks and signs every app with a throwaway key; `runner (Windows)` builds the Runner and runs every pack, refuses tampered copies and a plain `spec.json`, and opens the real window.
 >
-> **Part 2:** the Worker merge, the R2 layout and lifecycle, download tokens in the API, catalog and job pack publishing, and the switch of `build.yml` and the `am-build` prompt.
+> **Built in part 2 so far:**
+> - zip entry blocks (`build/zipblocks.py`);
+> - the download Worker (`worker/`), with the manual deploy workflow `worker.yml`;
+> - download tokens in the API (`api/downloads.py`). A catalog manifest entry with a `pack` field (`{prefix, runner, layers, exe, size_bytes}`) is served through the Worker once `DOWNLOAD_WORKER_URL` and `DOWNLOAD_TOKEN_SECRET` are set.
+>
+> **Still to do:** publishing the Runner, catalog packs and job packs as blocks (with the signing keys), the R2 lifecycle rules, and the switch of `build.yml` and the `am-build` prompt.
 
 Two details settled while building part 1:
 - A pack also carries `samples/` (tiny fake files), so the release gate can smoke-test every pack with a new Runner.

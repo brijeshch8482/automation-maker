@@ -44,6 +44,9 @@ uv workspace (root `pyproject.toml`, members `spec/`, `engine/` and `api/`; `too
   - build the Runner and run packs in it: `uv run python -m build.runner --out dist/runner --extra-keys <keys.json> --check-pack <app.mmx> ...`;
   - run a pack from source: `MAKEMYEXE_TRUSTED_KEYS=<keys.json> uv run python -m engine <app.mmx> --smoke-test`.
 
+  - zip entry blocks for the download Worker: `python3 -m build.zipblocks runner <folder> --out <dir>` · `... files --out <dir> app.mmx=<path> Guide.pdf=<path>`;
+  - the Worker (`worker/`, Node 22, no dependencies): `npm test` in `worker/`; deploy by hand with the workflow *Deploy download Worker* (`docs/DEPLOY.md` §11). The API signs its tokens in `api/downloads.py`; `tests/packaging/test_zipblocks.py` runs the real Worker code on real blocks.
+
   The engine side lives in `engine/pack.py` (verification) and `engine/ed25519.py`. The Runner trusts `build/trusted_keys.json` (public keys only). CI jobs `packs (Linux)` and `runner (Windows)` exercise all of it with a throwaway key.
 - Regenerate JSON Schema + block catalog after changing `spec/`: `uv run python -m spec.export_schema` (writes `spec/schema/`; `--check` fails if stale, CI runs it)
 - Engine (`engine/`): run an automation `uv run python -m engine automations/<id>/spec.json`; headless check on `sample_data` `... --smoke-test` (JSON report, exit 1 on failure); guide screenshots `... --guide-mode docs/screenshots/<id>/` (renders every screen offscreen with `QWidget.grab()`, plus `manifest.json` and the sample output). Local data goes to `%APPDATA%\MakeMyEXE\<id>\` (override with `MAKEMYEXE_DATA_DIR`). Linux needs Qt libs and fonts: `apt-get install libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3 fonts-dejavu-core fonts-lohit-deva`.

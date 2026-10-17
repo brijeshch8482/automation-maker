@@ -1,5 +1,10 @@
 """Download links: SigV4 presigning, the catalog manifest in R2, and links on ready jobs."""
 
+import base64
+import hashlib
+import hmac
+import json
+import time
 from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 
@@ -137,3 +142,65 @@ async def test_ready_job_gets_download_links(ctx):
     assert f"/jobs/{job_id}/attempt-0/InvoiceGenerator.zip?" in job["download_url"]
     assert "filename%3D%22InvoiceGenerator.zip%22" in job["download_url"]
     assert f"/jobs/{job_id}/attempt-0/Guide.pdf?" in job["guide_url"]
+
+
+# --- Downloads merged by the Worker (Phase 2b) ----------------------------------------------
+
+PACK_ENTRY = {
+    "prefix": "packs/catalog/make-pdf/1.0.0",
+    "runner": "runner/1.0.0",
+    "layers": [],
+    "exe": "MakePDF",
+    "size_bytes": 52_400_000,
+}
+
+
+async def test_pack_downloads_go_through_the_worker_once_configured(ctx, monkeypatch):
+    from pydantic import SecretStr
+
+    manifest = {
+        "automations": {"make-pdf": {**MANIFEST["automations"]["make-pdf"], "pack": PACK_ENTRY}}
+    }
+    storage, _ = make_storage(lambda r: httpx.Response(200, json=manifest))
+    ctx.app.state.storage = storage
+
+    # Not configured yet: the presigned zip, as before.
+    body = (await ctx.client.get("/automations/make-pdf/download")).json()
+    assert "/catalog/make-pdf/1.0.0/MakePDF.zip?" in body["url"]
+
+    settings = ctx.app.state.settings
+    monkeypatch.setattr(settings, "download_worker_url", "https://dl.example.workers.dev/")
+    monkeypatch.setattr(settings, "download_token_secret", SecretStr("s3cret"))
+    body = (await ctx.client.get("/automations/make-pdf/download")).json()
+    assert body["url"].startswith("https://dl.example.workers.dev/d/")
+    assert body["filename"] == "MakePDF.zip"
+    assert body["size_bytes"] == 52_400_000
+    assert body["expires_in"] == 900
+    assert "/packs/catalog/make-pdf/1.0.0/Guide.pdf?" in body["guide_url"]
+    token = body["url"].rsplit("/", 1)[1]
+    body_part, mac = token.split(".")
+    payload = json.loads(base64.urlsafe_b64decode(body_part + "=" * (-len(body_part) % 4)))
+    assert {k: payload[k] for k in ("runner", "layers", "pack", "name")} == {
+        "runner": "runner/1.0.0",
+        "layers": [],
+        "pack": "packs/catalog/make-pdf/1.0.0",
+        "name": "MakePDF",
+    }
+    assert 0 < payload["exp"] - time.time() <= 900
+    signed = hmac.new(b"s3cret", body_part.encode(), hashlib.sha256).digest()
+    assert base64.urlsafe_b64encode(signed).rstrip(b"=").decode() == mac
+
+
+def test_tokens_name_only_known_prefixes():
+    from api.downloads import download_token
+
+    good = {"runner": "runner/1.0.0", "layers": [], "pack": PACK_ENTRY["prefix"], "name": "A"}
+    download_token("s", **good)
+    for bad in (
+        {"runner": "runner/../x"},
+        {"pack": "catalog/manifest.json"},
+        {"name": "Make PDF"},
+        {"layers": ["layers/../../x/1"]},
+    ):
+        with pytest.raises(ValueError):
+            download_token("s", **{**good, **bad})

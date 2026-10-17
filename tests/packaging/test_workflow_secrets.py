@@ -113,3 +113,11 @@ def test_artifact_cleanup_is_manual_and_uses_no_secrets():
     assert job["permissions"] == {"actions": "write"}
     assert not secrets_used(job)
     assert not any("actions/checkout" in s.get("uses", "") for s in job["steps"])
+
+
+def test_worker_deploy_is_manual_and_uses_the_worker_environment():
+    path = REPO_ROOT / ".github" / "workflows" / "worker.yml"
+    workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+    # Manual only: a push could run it before the environment exists, creating it unprotected.
+    assert set(workflow[True]) == {"workflow_dispatch"}
+    assert workflow["jobs"]["deploy"]["environment"] == "worker"

@@ -245,6 +245,28 @@ Apps are delivered as signed packs, and the Runner runs only packs signed with a
 
 The workflow runs only when started by hand and uses only the run's own `GITHUB_TOKEN`. GitHub counts storage as an average over the month, so the usage figure in Settings › Billing drops over the following days, not at once.
 
+## 11. Download Worker (Runner + packs, Phase 2b)
+
+The Worker `makemyexe-download` joins the Runner, library layers and an app pack from R2 into one zip at download time (`worker/`, ARCHITECTURE.md §8.6). It's off until these steps are done. The API only uses it for apps that have a signed pack in the catalog manifest (Phase 2b part 2 publishing); everything else keeps the direct zip link from §6.
+
+1. **A shared secret.** Make one random value (for example `openssl rand -hex 32`). It goes into two places only: Render and the GitHub environment in step 3. Not into the repo or a chat.
+2. **Cloudflare API token.** Cloudflare › My Profile › API Tokens › Create Token:
+   - template **Edit Cloudflare Workers**;
+   - account resources: only your account;
+   - zone resources: none needed.
+
+   Also note your **Account ID** (Workers & Pages › Overview, right side).
+3. **GitHub environment `worker`** in automation-maker. As always, create it with its branch rule first: Settings › Environments › New environment `worker` › Selected branches › `main` › Save. Then add three environment secrets:
+   - `CLOUDFLARE_API_TOKEN` (step 2);
+   - `CLOUDFLARE_ACCOUNT_ID`;
+   - `DOWNLOAD_TOKEN_SECRET` (step 1).
+4. **Deploy:** automation-maker › Actions › *Deploy download Worker* › Run workflow (`main`). It runs the Worker's tests, deploys it with its R2 binding (bucket `makemyexe-builds`, read only) and sets its secret. The run log shows its URL, `https://makemyexe-download.<your-subdomain>.workers.dev`.
+5. **Render** › the API › Environment:
+   - `DOWNLOAD_WORKER_URL` = that URL;
+   - `DOWNLOAD_TOKEN_SECRET` = the value from step 1.
+
+Run the workflow again whenever `worker/` changes. It runs only when started by hand, so it can never create the `worker` environment unprotected.
+
 ## Running the API image locally
 
 ```bash

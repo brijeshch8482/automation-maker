@@ -24,4 +24,12 @@ Web product where users pick a ready-made automation or describe a custom one, a
 - EXEs target Windows 10/11. Cloud dev is Linux: run Qt tests with `QT_QPA_PLATFORM=offscreen`; real Windows builds run in GitHub Actions.
 - Python 3.12, Ruff for lint/format, pytest for tests. Every block and every catalog automation needs tests that use its `sample_data`.
 - Routine prompts in `docs/ROUTINES.md` must match what's saved at claude.ai/code/routines. Update both together.
-- Commands: add them here as each package is set up.
+
+## Commands
+uv workspace (root `pyproject.toml`, members `spec/` and `engine/`; `tools/` is imported from the repo root). Run everything from the repo root.
+- Install: `uv sync`
+- Lint / format: `uv run ruff check .` · `uv run ruff format .` (CI uses `--check`)
+- Tests: `QT_QPA_PLATFORM=offscreen uv run pytest`
+- Validate a spec: `uv run python -m tools.validate_spec <file> [<file> ...]` (exit 1 on any issue)
+- Regenerate JSON Schema + block catalog after changing `spec/`: `uv run python -m spec.export_schema` (writes `spec/schema/`; `--check` fails if stale, CI runs it)
+- Add a block: define its args model and `BlockDef` in `spec/src/spec/catalog.py`, mark spec references with `ValueRef` / `InputRef(...)` / `ColumnRef(...)` / `TemplateStr`, then regenerate the schema.

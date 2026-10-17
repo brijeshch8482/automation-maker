@@ -1,0 +1,1175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://makemyexe.com/schema/automation_spec.schema.json",
+  "$defs": {
+    "CheckboxField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "checkbox",
+          "title": "Type",
+          "type": "string"
+        },
+        "default": {
+          "type": "boolean",
+          "default": false,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "CheckboxField",
+      "type": "object"
+    },
+    "DateField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "date",
+          "title": "Type",
+          "type": "string"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "const": "today",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "DateField",
+      "type": "object"
+    },
+    "EmailField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "email",
+          "title": "Type",
+          "type": "string"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "EmailField",
+      "type": "object"
+    },
+    "FileField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "extensions": {
+          "items": {
+            "pattern": "^[a-z0-9]+$",
+            "type": "string"
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
+        "type": {
+          "const": "file",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "FileField",
+      "type": "object"
+    },
+    "FilesField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "extensions": {
+          "items": {
+            "pattern": "^[a-z0-9]+$",
+            "type": "string"
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
+        "type": {
+          "const": "files",
+          "title": "Type",
+          "type": "string"
+        },
+        "min_count": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Min Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "FilesField",
+      "type": "object"
+    },
+    "FolderField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "folder",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "FolderField",
+      "type": "object"
+    },
+    "ImageFileField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "image_file",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "ImageFileField",
+      "type": "object"
+    },
+    "MoneyField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "money",
+          "title": "Type",
+          "type": "string"
+        },
+        "currency": {
+          "default": "INR",
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "MoneyField",
+      "type": "object"
+    },
+    "Network": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Domains",
+          "type": "array"
+        }
+      },
+      "title": "Network",
+      "type": "object"
+    },
+    "NumberField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "number",
+          "title": "Type",
+          "type": "string"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "NumberField",
+      "type": "object"
+    },
+    "Output": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "file",
+            "files",
+            "folder",
+            "none"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "open_after": {
+          "default": false,
+          "title": "Open After",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Output",
+      "type": "object"
+    },
+    "PhoneField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "phone",
+          "title": "Type",
+          "type": "string"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "PhoneField",
+      "type": "object"
+    },
+    "SelectField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "select",
+          "title": "Type",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Options",
+          "type": "array"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type",
+        "options"
+      ],
+      "title": "SelectField",
+      "type": "object"
+    },
+    "Step": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+          "title": "Block",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "out": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Out"
+        }
+      },
+      "required": [
+        "block"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "TableField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "table",
+          "title": "Type",
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "checkbox": "#/$defs/CheckboxField",
+                "date": "#/$defs/DateField",
+                "email": "#/$defs/EmailField",
+                "money": "#/$defs/MoneyField",
+                "number": "#/$defs/NumberField",
+                "phone": "#/$defs/PhoneField",
+                "select": "#/$defs/SelectField",
+                "text": "#/$defs/TextField"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextField"
+              },
+              {
+                "$ref": "#/$defs/NumberField"
+              },
+              {
+                "$ref": "#/$defs/MoneyField"
+              },
+              {
+                "$ref": "#/$defs/PhoneField"
+              },
+              {
+                "$ref": "#/$defs/EmailField"
+              },
+              {
+                "$ref": "#/$defs/DateField"
+              },
+              {
+                "$ref": "#/$defs/SelectField"
+              },
+              {
+                "$ref": "#/$defs/CheckboxField"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "min_rows": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Min Rows",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "type",
+        "columns"
+      ],
+      "title": "TableField",
+      "type": "object"
+    },
+    "TextField": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        },
+        "multiline": {
+          "default": false,
+          "title": "Multiline",
+          "type": "boolean"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        }
+      },
+      "required": [
+        "key",
+        "type"
+      ],
+      "title": "TextField",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One automation. Source of truth for the web preview, EXE, tests and guide.",
+  "properties": {
+    "id": {
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "title": "Version",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "category": {
+      "enum": [
+        "documents",
+        "pdf",
+        "images",
+        "excel",
+        "files",
+        "convert",
+        "other"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "network": {
+      "$ref": "#/$defs/Network"
+    },
+    "settings": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "checkbox": "#/$defs/CheckboxField",
+            "date": "#/$defs/DateField",
+            "email": "#/$defs/EmailField",
+            "file": "#/$defs/FileField",
+            "files": "#/$defs/FilesField",
+            "folder": "#/$defs/FolderField",
+            "image_file": "#/$defs/ImageFileField",
+            "money": "#/$defs/MoneyField",
+            "number": "#/$defs/NumberField",
+            "phone": "#/$defs/PhoneField",
+            "select": "#/$defs/SelectField",
+            "table": "#/$defs/TableField",
+            "text": "#/$defs/TextField"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TextField"
+          },
+          {
+            "$ref": "#/$defs/NumberField"
+          },
+          {
+            "$ref": "#/$defs/MoneyField"
+          },
+          {
+            "$ref": "#/$defs/PhoneField"
+          },
+          {
+            "$ref": "#/$defs/EmailField"
+          },
+          {
+            "$ref": "#/$defs/DateField"
+          },
+          {
+            "$ref": "#/$defs/FileField"
+          },
+          {
+            "$ref": "#/$defs/FilesField"
+          },
+          {
+            "$ref": "#/$defs/FolderField"
+          },
+          {
+            "$ref": "#/$defs/ImageFileField"
+          },
+          {
+            "$ref": "#/$defs/SelectField"
+          },
+          {
+            "$ref": "#/$defs/CheckboxField"
+          },
+          {
+            "$ref": "#/$defs/TableField"
+          }
+        ]
+      },
+      "title": "Settings",
+      "type": "array"
+    },
+    "inputs": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "checkbox": "#/$defs/CheckboxField",
+            "date": "#/$defs/DateField",
+            "email": "#/$defs/EmailField",
+            "file": "#/$defs/FileField",
+            "files": "#/$defs/FilesField",
+            "folder": "#/$defs/FolderField",
+            "image_file": "#/$defs/ImageFileField",
+            "money": "#/$defs/MoneyField",
+            "number": "#/$defs/NumberField",
+            "phone": "#/$defs/PhoneField",
+            "select": "#/$defs/SelectField",
+            "table": "#/$defs/TableField",
+            "text": "#/$defs/TextField"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TextField"
+          },
+          {
+            "$ref": "#/$defs/NumberField"
+          },
+          {
+            "$ref": "#/$defs/MoneyField"
+          },
+          {
+            "$ref": "#/$defs/PhoneField"
+          },
+          {
+            "$ref": "#/$defs/EmailField"
+          },
+          {
+            "$ref": "#/$defs/DateField"
+          },
+          {
+            "$ref": "#/$defs/FileField"
+          },
+          {
+            "$ref": "#/$defs/FilesField"
+          },
+          {
+            "$ref": "#/$defs/FolderField"
+          },
+          {
+            "$ref": "#/$defs/ImageFileField"
+          },
+          {
+            "$ref": "#/$defs/SelectField"
+          },
+          {
+            "$ref": "#/$defs/CheckboxField"
+          },
+          {
+            "$ref": "#/$defs/TableField"
+          }
+        ]
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/Step"
+      },
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "output": {
+      "$ref": "#/$defs/Output"
+    },
+    "sample_data": {
+      "additionalProperties": true,
+      "title": "Sample Data",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "title",
+    "category",
+    "steps",
+    "output"
+  ],
+  "title": "AutomationSpec",
+  "type": "object"
+}

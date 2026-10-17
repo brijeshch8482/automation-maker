@@ -1,0 +1,18 @@
+[project]
+name = "makemyexe-engine"
+version = "0.1.0"
+description = "MakeMyEXE desktop runtime (PySide6)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "makemyexe-spec",
+]
+
+[tool.uv.sources]
+makemyexe-spec = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "engine"

@@ -1,0 +1,192 @@
+{
+  "calc.line_totals": {
+    "description": "Per-row amount = qty x rate for a table input, plus subtotal, tax (percent) and grand total.",
+    "produces": "object with rows, subtotal, tax, total",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "title": "Table",
+          "type": "string",
+          "x-field-types": [
+            "table"
+          ],
+          "x-ref": "input"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "string",
+          "x-ref": "column",
+          "x-table-arg": "table"
+        },
+        "rate": {
+          "title": "Rate",
+          "type": "string",
+          "x-ref": "column",
+          "x-table-arg": "table"
+        },
+        "tax": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-ref": "value"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tax"
+        }
+      },
+      "required": [
+        "table",
+        "qty",
+        "rate"
+      ],
+      "title": "LineTotalsArgs",
+      "type": "object"
+    }
+  },
+  "counter.next": {
+    "description": "Next value of a local counter that persists between runs, as prefix + zero-padded number (e.g. INV-0007).",
+    "produces": "text",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "prefix": {
+          "default": "",
+          "maxLength": 20,
+          "title": "Prefix",
+          "type": "string"
+        },
+        "start": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "pad": {
+          "default": 0,
+          "maximum": 12,
+          "minimum": 0,
+          "title": "Pad",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CounterNextArgs",
+      "type": "object"
+    }
+  },
+  "custom.step": {
+    "description": "Run a generated custom function (custom_step.py) through the context API. Use only when no combination of blocks can do the job.",
+    "produces": "value returned by the function",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "default": "run",
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "title": "Function",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "title": "CustomStepArgs",
+      "type": "object"
+    }
+  },
+  "file.save": {
+    "description": "Save a document produced by an earlier step to a folder under a new name. Never overwrites: adds a suffix if the name exists.",
+    "produces": "path of the saved file",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string",
+          "x-ref": "value"
+        },
+        "folder": {
+          "title": "Folder",
+          "type": "string",
+          "x-ref": "value"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string",
+          "x-template": true
+        }
+      },
+      "required": [
+        "source",
+        "folder",
+        "name"
+      ],
+      "title": "FileSaveArgs",
+      "type": "object"
+    }
+  },
+  "pdf.merge": {
+    "description": "Merge the selected PDF files, in order, into one PDF. Originals are not changed.",
+    "produces": "PDF document",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "title": "Files",
+          "type": "string",
+          "x-field-types": [
+            "files"
+          ],
+          "x-ref": "input"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "PdfMergeArgs",
+      "type": "object"
+    }
+  },
+  "pdf.render_template": {
+    "description": "Render a PDF from a bundled template using the inputs, settings and earlier step outputs.",
+    "produces": "PDF document",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "template": {
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Template",
+          "type": "string"
+        }
+      },
+      "required": [
+        "template"
+      ],
+      "title": "RenderTemplateArgs",
+      "type": "object"
+    }
+  }
+}

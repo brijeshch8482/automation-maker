@@ -1,0 +1,41 @@
+[project]
+name = "makemyexe"
+version = "0.1.0"
+description = "MakeMyEXE monorepo: spec, engine, tools, catalog"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "makemyexe-spec",
+    "makemyexe-engine",
+]
+
+[dependency-groups]
+dev = [
+    "jsonschema>=4.23",
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["spec", "engine"]
+
+[tool.uv.sources]
+makemyexe-spec = { workspace = true }
+makemyexe-engine = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Docs hold illustrative snippets; don't let `ruff format` rewrite them.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The repo root holds tools/ (run as `python -m tools.<name>`), so make it importable.
+pythonpath = ["."]
+addopts = ["--import-mode=importlib", "-ra"]

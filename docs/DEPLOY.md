@@ -214,6 +214,23 @@ If a job fails, its page shows why, and each attempt links to its routine sessio
 3. **Submit a description.** With `PROVIDER=fake` no routine runs, so the job stays in "Designing" until the watchdog fails it after 15 minutes. That's expected until the routines are set up (section 7).
 4. **Rotating a secret:** change it in the dashboard and redeploy. For `BUILD_CALLBACK_SECRET`, update automation-builds at the same time.
 
+## 9. Pack signing keys (Runner + packs, Phase 2b)
+
+Apps are delivered as signed packs, and the Runner runs only packs signed with a key it trusts. There are two keys: **catalog** (ready-made apps, automation-maker) and **jobs** (custom apps, automation-builds). Nothing needs them until packs are published (Phase 2b part 2), but they can be made now. The private halves go only into GitHub environments, never into the repo or a chat. The public halves are public: they go into `build/trusted_keys.json`.
+
+1. **Make the key pairs** on your own computer (Git Bash on Windows, or a terminal on Mac/Linux; needs `openssl`):
+   ```bash
+   openssl genpkey -algorithm ed25519 -out catalog-1.pem
+   openssl genpkey -algorithm ed25519 -out jobs-1.pem
+   for k in catalog-1 jobs-1; do echo "$k: $(openssl pkey -in $k.pem -pubout -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')"; done
+   ```
+   The last line prints each public key as 64 hex characters. With a checkout of this repo, `uv run python -m build.pack keygen --key-id catalog-1 --out keys/` does the same.
+2. **Private halves into the environments** (create each environment with its branch rule first, §5):
+   - automation-maker › environment `catalog` › secret `PACK_SIGNING_KEY` = the whole contents of `catalog-1.pem`, from `-----BEGIN PRIVATE KEY-----` through `-----END PRIVATE KEY-----`;
+   - automation-builds › environment `publish` › secret `PACK_SIGNING_KEY` = the contents of `jobs-1.pem`.
+3. **Public halves into the repo:** add `"catalog-1": "<hex>"` and `"jobs-1": "<hex>"` to `build/trusted_keys.json` in a PR, or send me the two hex lines: they're public, so they may be shared.
+4. **Delete the `.pem` files** from your computer, or keep them offline (on a USB stick, say) in case you need them. A lost key just means a new key id (`catalog-2`) and a Runner release.
+
 ## Running the API image locally
 
 ```bash

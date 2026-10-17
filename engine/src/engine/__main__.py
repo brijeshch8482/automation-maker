@@ -4,9 +4,12 @@
     python -m engine spec.json --guide-mode out/        screenshots for the guide
     python -m engine spec.json --smoke-test [--out d/]  headless run on sample_data, JSON report
     python -m engine spec.json --launch-check           open the real window, then close it
+    python -m engine app.mmx ...                        the same from a signed pack
 
-In a packaged EXE the spec is bundled (app/spec.json) and the path may be left out. A windowed
-EXE has no console, so --report FILE also writes the result as JSON for the build to read.
+The Runner (one frozen engine for every app, build/runner.py) opens the signed pack app.mmx
+next to its own exe and accepts nothing else: no spec.json, no unsigned or changed pack
+(engine/pack.py). A standalone per-app EXE (build/package.py) bundles app/spec.json instead.
+A windowed EXE has no console, so --report FILE also writes the result as JSON for the build.
 """
 
 from __future__ import annotations
@@ -24,7 +27,17 @@ from engine.guards import block_network
 from engine.loader import load_spec
 
 
+def is_runner() -> bool:
+    return (
+        getattr(sys, "frozen", False)
+        and (Path(getattr(sys, "_MEIPASS", "")) / "runner.json").is_file()
+    )
+
+
 def _default_spec() -> Path | None:
+    if is_runner():
+        # Next to the exe, never the current directory.
+        return Path(sys.executable).resolve().parent / "app.mmx"
     if getattr(sys, "frozen", False):
         bundled = Path(getattr(sys, "_MEIPASS", "")) / "app" / "spec.json"
         return bundled if bundled.is_file() else Path(sys.executable).parent / "spec.json"
@@ -49,11 +62,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.spec is None:
         parser.error("give the path to spec.json")
 
+    automated = args.smoke_test or args.guide_mode or args.launch_check
     try:
-        loaded = load_spec(args.spec)
+        loaded = _load(args.spec)
     except EngineError as err:
         print(f"error: {err}", file=sys.stderr)
         write_report(args.report, {"status": "failed", "error": str(err)})
+        if is_runner() and not automated:
+            _show_error(str(err))
         return 2
     if not loaded.spec.network.required:
         block_network()
@@ -103,6 +119,30 @@ def main(argv: list[str] | None = None) -> int:
     del window
     app.processEvents()
     return code
+
+
+def _load(path: Path) -> Any:
+    from engine.pack import PackError, load_pack, started_from_zip
+
+    if is_runner():
+        if started_from_zip(Path(sys.executable)):
+            raise PackError("Extract the zip first, then open the app from the new folder.")
+        if path.suffix.lower() != ".mmx":
+            raise PackError("This app runs only signed MakeMyEXE apps (app.mmx).")
+    if path.suffix.lower() == ".mmx":
+        from engine.keys import trusted_keys
+
+        return load_pack(path, trusted_keys())
+    return load_spec(path)
+
+
+def _show_error(message: str) -> None:
+    """A windowed exe has no console: say what's wrong in a dialog."""
+    from PySide6.QtWidgets import QApplication, QMessageBox
+
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    QMessageBox.critical(None, "MakeMyEXE", message)
+    del app
 
 
 def _launch_check(app: Any, loaded: Any, report_path: Path | None) -> int:

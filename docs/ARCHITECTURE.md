@@ -224,7 +224,20 @@ One JSON document per automation, defined as Pydantic models in `spec/` and expo
 
 ## 8. Desktop engine & delivery: Runner + packs
 
-> **Decided 2026-10-17; not built yet** (Phases 2b and 2c, §13). It replaces one PyInstaller build per automation. Until 2b ships, the current per-automation EXE pipeline and the presigned R2 downloads stay live.
+> **Decided 2026-10-17** (Phases 2b and 2c, §13). It replaces one PyInstaller build per automation. Until 2b ships, the current per-automation EXE pipeline and the presigned R2 downloads stay live.
+>
+> **Built so far (2b, part 1):**
+> - the pack format and verification (`engine/pack.py`, `engine/ed25519.py`: pure-Python Ed25519, so the Runner needs no crypto library);
+> - pack making and signing (`build/pack.py`, standard library + `openssl pkeyutl`);
+> - the Runner build (`build/runner.py`) and Runner start-up rules (`engine/__main__.py`);
+> - the Linux app check (`build/pack_check.py`);
+> - CI: `packs (Linux)` checks and signs every app with a throwaway key; `runner (Windows)` builds the Runner and runs every pack, refuses tampered copies and a plain `spec.json`, and opens the real window.
+>
+> **Part 2:** the Worker merge, the R2 layout and lifecycle, download tokens in the API, catalog and job pack publishing, and the switch of `build.yml` and the `am-build` prompt.
+
+Two details settled while building part 1:
+- A pack also carries `samples/` (tiny fake files), so the release gate can smoke-test every pack with a new Runner.
+- The publish job builds the pack from the app folder at the pinned commit, read as data, never from Job 1's artifact. Generated code ran in Job 1 and could have changed its own output after the checks.
 
 What the user downloads (one zip; extract, double-click; no install):
 ```text

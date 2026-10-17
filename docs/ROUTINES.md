@@ -192,7 +192,7 @@ When `status` is `failed`, `artifact_key` and `guide_key` are null and `report` 
 
 ## 5. Windows workflow dispatch
 
-> **Changing in Phase 2b/2c** (`ARCHITECTURE.md` §8–9): Job 1 becomes a Linux pack build, Job 2 signs the pack, `layer.yml` builds library layers through the policy gate, and a library rejection comes back as a repair fire with stage `library`. The PR that implements 2b updates this section and the saved routine prompts together.
+> **Changing in Phase 2b/2c** (`ARCHITECTURE.md` §8–9): Job 1 becomes a Linux pack build, Job 2 signs the pack, `layer.yml` builds library layers through the policy gate, and a library rejection comes back as a repair fire with stage `library`. The PR that implements 2b updates this section and the saved routine prompts together. 2b part 1 (packs, signing, the Runner and its CI) doesn't change `build.yml` or the prompts yet; part 2 does.
 
 FastAPI (GitHub token with `actions:write` on `automation-builds` only):
 

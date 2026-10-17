@@ -130,19 +130,14 @@ const BUNDLED: AutomationSpec[] = Object.values(specFiles).sort((a, b) =>
   a.title.localeCompare(b.title),
 );
 
+// The ready-made catalog ships with the site (same repo, same deploy as the API's copy), so its
+// pages render at once instead of waiting for a sleeping free-tier API to wake up.
 export async function listAutomations(): Promise<AutomationSummary[]> {
-  if (!apiUrl()) return BUNDLED;
-  return request<AutomationSummary[]>("/automations");
+  return BUNDLED;
 }
 
 export async function getAutomation(id: string): Promise<AutomationSpec | null> {
-  if (!apiUrl()) return BUNDLED.find((spec) => spec.id === id) ?? null;
-  try {
-    return await request<AutomationSpec>(`/automations/${encodeURIComponent(id)}`);
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) return null;
-    throw err;
-  }
+  return BUNDLED.find((spec) => spec.id === id) ?? null;
 }
 
 // --- Jobs -----------------------------------------------------------------------------

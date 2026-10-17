@@ -1,4 +1,4 @@
-import { ApiError, getAutomation, getJob, jobsAvailable, listAutomations } from "./api";
+import { getAutomation, getJob, jobsAvailable, listAutomations } from "./api";
 import { mockFetch, useApi } from "./test/helpers";
 
 test("bundled catalog without the API", async () => {
@@ -16,9 +16,11 @@ test("job calls need a login", async () => {
   await expect(getJob("job_1")).rejects.toMatchObject({ status: 401 });
 });
 
-test("getAutomation maps 404 to null and keeps other errors", async () => {
+test("the catalog is bundled even with the API, so it never waits for it", async () => {
   useApi();
-  mockFetch(({ path }) => (path === "/automations/boom" ? { status: 500, body: {} } : undefined));
+  const calls = mockFetch(() => ({ status: 500, body: {} }));
+  expect((await listAutomations()).length).toBeGreaterThan(0);
+  expect((await getAutomation("make-pdf"))?.title).toBe("Make PDF");
   expect(await getAutomation("nope")).toBeNull();
-  await expect(getAutomation("boom")).rejects.toBeInstanceOf(ApiError);
+  expect(calls).toHaveLength(0);
 });

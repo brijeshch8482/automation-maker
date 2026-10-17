@@ -19,3 +19,8 @@ export function supabaseConfig(): { url: string; anonKey: string } | null {
 export function devAuthEnabled(): boolean {
   return import.meta.env.VITE_DEV_AUTH === "true";
 }
+
+/** Public contact address shown in the footer and legal pages; left out when not set. */
+export function contactEmail(): string {
+  return (import.meta.env.VITE_CONTACT_EMAIL ?? "").trim();
+}

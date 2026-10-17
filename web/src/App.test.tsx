@@ -1,5 +1,6 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
 
 import { renderAt } from "./test/helpers";
 
@@ -58,4 +59,77 @@ test("Make PDF lists photos and PDFs and shows its options", async () => {
   );
   expect(screen.getByLabelText("Page size")).toHaveProperty("value", "A4");
   expect(screen.getByLabelText(/Make the file smaller/)).toHaveProperty("checked", false);
+});
+
+test("home page explains the product and links to the catalog", async () => {
+  renderAt("/");
+  expect(screen.getByRole("heading", { level: 1, name: /your own Windows app/ })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "From task to app in three steps" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Your data stays on your PC" })).toBeTruthy();
+  // The hero shows a live app preview; the featured list links to every automation.
+  expect(await screen.findByRole("figure", { name: /Preview of the Make PDF app/ })).toBeTruthy();
+  expect(screen.getByRole("link", { name: /Bulk Rename/ })).toHaveProperty("href", expect.stringContaining("/automations/bulk-rename"));
+  expect(document.title).toBe("MakeMyEXE · Windows automations that run offline");
+});
+
+test("catalog search and category filter", async () => {
+  const user = userEvent.setup();
+  renderAt("/automations");
+  expect(await screen.findByText("4 automations")).toBeTruthy();
+  expect(document.title).toBe("Automations · MakeMyEXE");
+
+  await user.click(screen.getByRole("button", { name: "PDF" }));
+  expect(screen.getByText("2 of 4 automations")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "PDF" })).toHaveProperty("ariaPressed", "true");
+  expect(screen.queryByRole("link", { name: /Bulk Rename/ })).toBeNull();
+
+  await user.click(screen.getByRole("button", { name: "All" }));
+  await user.type(screen.getByLabelText("Search automations"), "photos screenshots");
+  expect(screen.getByText("1 of 4 automations")).toBeTruthy();
+  expect(screen.getByRole("link", { name: /Make PDF/ })).toBeTruthy();
+
+  await user.clear(screen.getByLabelText("Search automations"));
+  await user.type(screen.getByLabelText("Search automations"), "payroll");
+  expect(screen.getByText(/No automation matches “payroll”/)).toBeTruthy();
+  expect(screen.getAllByRole("link", { name: /Request a custom app/ }).length).toBeGreaterThan(0);
+});
+
+test("mobile menu opens and closes on navigation", async () => {
+  const user = userEvent.setup();
+  renderAt("/");
+  const toggle = screen.getByRole("button", { name: "Open menu" });
+  expect(toggle).toHaveProperty("ariaExpanded", "false");
+  await user.click(toggle);
+  const menu = document.getElementById("mobile-menu")!;
+  expect(within(menu).getByRole("link", { name: "Custom app" })).toBeTruthy();
+  await user.click(within(menu).getByRole("link", { name: "Automations" }));
+  expect(document.getElementById("mobile-menu")).toBeNull();
+  expect(await screen.findByRole("heading", { level: 1, name: "Ready-made automations" })).toBeTruthy();
+});
+
+test("privacy and terms pages, linked from the footer", async () => {
+  const user = userEvent.setup();
+  renderAt("/");
+  const footer = screen.getByRole("contentinfo");
+  await user.click(within(footer).getByRole("link", { name: "Privacy" }));
+  expect(screen.getByRole("heading", { level: 1, name: "Privacy" })).toBeTruthy();
+  expect(screen.getByText(/description is deleted after 30 days/)).toBeTruthy();
+  await user.click(within(screen.getByRole("contentinfo")).getByRole("link", { name: "Terms" }));
+  expect(screen.getByRole("heading", { level: 1, name: "Terms of use" })).toBeTruthy();
+  // Without VITE_CONTACT_EMAIL no address is shown.
+  expect(screen.queryByText(/@/)).toBeNull();
+});
+
+test("contact address appears when configured", async () => {
+  vi.stubEnv("VITE_CONTACT_EMAIL", "hello@makemyexe.test");
+  renderAt("/privacy");
+  expect(screen.getAllByRole("link", { name: "hello@makemyexe.test" }).length).toBe(2); // footer + page
+});
+
+test("automation page has a breadcrumb and its own title", async () => {
+  renderAt("/automations/make-pdf");
+  const crumb = await screen.findByRole("navigation", { name: "Breadcrumb" });
+  expect(within(crumb).getByRole("link", { name: "Automations" })).toBeTruthy();
+  expect(document.title).toBe("Make PDF · MakeMyEXE");
+  expect(screen.getByRole("button", { name: /Download for Windows/ })).toHaveProperty("disabled", true);
 });

@@ -30,6 +30,7 @@ const VIEWPORTS = { desktop: { width: 1280, height: 860 }, mobile: { width: 390,
 async function shot(page, name, device) {
   // Sticky elements are drawn where the viewport is; full-page shots start from the top.
   await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(250); // let colour transitions finish
   const file = join(outDir, `${name}-${device}.png`);
   await page.screenshot({ path: file, fullPage: true });
   console.log(`saved ${file}`);
@@ -38,7 +39,9 @@ async function shot(page, name, device) {
 // --- 1. Static pages ----------------------------------------------------------------------
 
 const STATIC_SHOTS = [
-  ["catalog", "/"],
+  ["home", "/"],
+  ["catalog", "/automations"],
+  ["catalog-filtered", "/automations", (page) => page.getByRole("button", { name: "PDF", exact: true }).click()],
   ["invoice-generator", "/automations/invoice-generator"],
   [
     "invoice-generator-setup",
@@ -60,7 +63,11 @@ const STATIC_SHOTS = [
             "and email it to asha@example.com every month.",
         ),
   ],
+  ["privacy", "/privacy"],
+  ["terms", "/terms"],
   ["not-found", "/automations/nope"],
+  // The menu button only exists at phone width.
+  ["menu-open", "/", (page) => page.getByRole("button", { name: "Open menu" }).click(), ["mobile"]],
 ];
 
 async function staticShots(browser) {
@@ -69,9 +76,13 @@ async function staticShots(browser) {
   try {
     for (const [device, viewport] of Object.entries(VIEWPORTS)) {
       const page = await browser.newPage({ viewport });
-      for (const [name, path, action] of STATIC_SHOTS) {
+      for (const [name, path, action, devices] of STATIC_SHOTS) {
+        if (devices && !devices.includes(device)) continue;
         await page.goto(`${SITE}${path}`, { waitUntil: "networkidle" });
-        if (action) await action(page);
+        if (action) {
+          await action(page);
+          await page.waitForTimeout(400); // let colour transitions finish
+        }
         await shot(page, name, device);
       }
       await page.close();
@@ -261,11 +272,102 @@ async function jobFlowShots(browser) {
   }
 }
 
+// --- 3. Sign-in screens (Supabase Auth, answered by this script) ---------------------------
+
+const SUPABASE = "https://demo-project.supabase.co";
+
+function fakeSession(email) {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    access_token: "header.payload.signature",
+    token_type: "bearer",
+    expires_in: 3600,
+    expires_at: now + 3600,
+    refresh_token: "refresh",
+    user: { id: "user-1", email, aud: "authenticated", role: "authenticated", app_metadata: {}, user_metadata: {} },
+  };
+}
+
+async function fakeSupabase(page) {
+  await page.route(`${SUPABASE}/auth/v1/**`, (route) => {
+    const path = new URL(route.request().url()).pathname.replace("/auth/v1", "");
+    const body =
+      path === "/settings"
+        ? { external: { email: true, google: true }, disable_signup: false }
+        : path === "/token"
+          ? fakeSession("asha@example.com")
+          : {};
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.route(`${API}/**`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+}
+
+async function authShots(browser) {
+  process.env.VITE_API_URL = API;
+  process.env.VITE_SUPABASE_URL = SUPABASE;
+  process.env.VITE_SUPABASE_ANON_KEY = "sb_publishable_demo";
+  try {
+    await build({ root: webDir, logLevel: "warn", build: { outDir: "dist-auth" } });
+    const server = await preview({
+      root: webDir,
+      build: { outDir: "dist-auth" },
+      preview: { port: 4321, strictPort: true },
+      logLevel: "warn",
+    });
+    try {
+      for (const [device, viewport] of Object.entries(VIEWPORTS)) {
+        const page = await browser.newPage({ viewport });
+        await fakeSupabase(page);
+        const login = async () => {
+          await page.goto(`${SITE}/login`, { waitUntil: "networkidle" });
+          await page.getByRole("button", { name: "Continue with Google" }).waitFor();
+        };
+        await login();
+        await shot(page, "auth-sign-in", device);
+        await page.getByRole("tab", { name: "Email code" }).click();
+        await page.getByLabel("Email").fill("asha@example.com");
+        await shot(page, "auth-email-code", device);
+        await page.getByRole("button", { name: "Email me a code" }).click();
+        await page.getByLabel("Code").fill("123456");
+        await shot(page, "auth-verify-code", device);
+
+        await login();
+        await page.getByRole("button", { name: "Create an account" }).click();
+        await page.getByLabel("Email").fill("new@example.com");
+        await page.getByLabel("Password", { exact: true }).fill("short");
+        await shot(page, "auth-sign-up", device);
+
+        await login();
+        await page.getByRole("button", { name: "Forgot password?" }).click();
+        await shot(page, "auth-forgot", device);
+
+        await login();
+        await page.getByLabel("Email").fill("asha@example.com");
+        await page.getByLabel("Password", { exact: true }).fill("correct horse");
+        await page.getByRole("button", { name: "Sign in", exact: true }).click();
+        await page.getByRole("heading", { name: "My apps" }).waitFor();
+        if (device === "desktop") {
+          await page.getByRole("button", { name: "Account" }).click();
+          await shot(page, "auth-account-menu", device);
+        }
+        await page.close();
+      }
+    } finally {
+      server.httpServer.close();
+    }
+  } finally {
+    delete process.env.VITE_API_URL;
+    delete process.env.VITE_SUPABASE_URL;
+    delete process.env.VITE_SUPABASE_ANON_KEY;
+  }
+}
+
 await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({ executablePath });
 try {
   await staticShots(browser);
   await jobFlowShots(browser);
+  await authShots(browser);
 } finally {
   await browser.close();
 }

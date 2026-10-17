@@ -26,12 +26,13 @@ Web product where users pick a ready-made automation or describe a custom one, a
 - Routine prompts in `docs/ROUTINES.md` must match what's saved at claude.ai/code/routines. Update both together.
 
 ## Commands
-uv workspace (root `pyproject.toml`, members `spec/` and `engine/`; `tools/` is imported from the repo root). Run everything from the repo root.
+uv workspace (root `pyproject.toml`, members `spec/`, `engine/` and `api/`; `tools/` is imported from the repo root). Run everything from the repo root.
 - Install: `uv sync`
 - Lint / format: `uv run ruff check .` · `uv run ruff format .` (CI uses `--check`)
 - Tests: `QT_QPA_PLATFORM=offscreen uv run pytest`
 - Validate a spec: `uv run python -m tools.validate_spec <file> [<file> ...]` (exit 1 on any issue)
 - Regenerate JSON Schema + block catalog after changing `spec/`: `uv run python -m spec.export_schema` (writes `spec/schema/`; `--check` fails if stale, CI runs it)
+- API (`api/`): `uv run uvicorn api.app:create_app --factory --reload` (settings from env or `.env`, see `.env.example`; defaults: SQLite, fake provider, no login). With `DEV_AUTH=true`, call it with `Authorization: Bearer dev:<user>`; play a routine by POSTing to `/internal/routine-callback` with the job's token (`api.security.callback_token`).
 - Web (`web/`, Node 22): `npm ci` · `npm run dev` · `npm test` · `npm run typecheck` · `npm run build`
 - TS types from the spec schema (after `spec.export_schema`): `npm run gen:types` in `web/` (`check:types` in CI)
 - Web screenshots: `npm run build && npm run screenshots` in `web/` → `docs/screenshots/web/` (uses `/opt/pw-browsers/chromium`, or set `CHROMIUM_PATH`)

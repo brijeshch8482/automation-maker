@@ -1,0 +1,34 @@
+{
+  "_comment": "Shared by api/src/api/pii.py (tests/api/test_pii.py) and web/src/lib/pii.ts (pii.test.ts). Change both guards together.",
+  "detect": [
+    { "text": "Send it to asha.traders@gmail.com please", "expect": [["email", "asha.traders@gmail.com"]] },
+    { "text": "Send it to +91 98765 43210 please", "expect": [["phone", "+91 98765 43210"]] },
+    { "text": "Send it to 9876543210 please", "expect": [["phone", "9876543210"]] },
+    { "text": "Send it to 09876543210 please", "expect": [["phone", "09876543210"]] },
+    { "text": "Send it to +44 20 7946 0958 please", "expect": [["phone", "+44 20 7946 0958"]] },
+    { "text": "Send it to ABCPE1234F please", "expect": [["pan", "ABCPE1234F"]] },
+    { "text": "GSTIN 27ABCPE1234F1Z5", "expect": [["gstin", "27ABCPE1234F1Z5"]] },
+    { "text": "Send it to HDFC0001234 please", "expect": [["ifsc", "HDFC0001234"]] },
+    { "text": "Send it to 4111 1111 1111 1111 please", "expect": [["card", "4111 1111 1111 1111"]] },
+    { "text": "Send it to 4111-1111-1111-1111 please", "expect": [["card", "4111-1111-1111-1111"]] },
+    { "text": "Send it to 2341 2341 2346 please", "expect": [["aadhaar", "2341 2341 2346"]] },
+    { "text": "Send it to 234123412346 please", "expect": [["aadhaar", "234123412346"]] },
+    { "text": "ref 234123412345", "expect": [["bank_account", "234123412345"]] },
+    { "text": "Send it to 50100012345678 please", "expect": [["bank_account", "50100012345678"]] },
+    {
+      "text": "Call 9876543210 or mail a@b.co, PAN ABCPE1234F",
+      "expect": [["phone", "9876543210"], ["email", "a@b.co"], ["pan", "ABCPE1234F"]]
+    },
+    {
+      "text": "Invoice number like INV-0007, qty 2, rate 500, GST 18%. Customer name, phone and email are typed in each time. Date as 17-10-2026.",
+      "expect": []
+    }
+  ],
+  "mask": [
+    {
+      "text": "Bill Asha (9876543210, asha@example.com) monthly",
+      "masked": "Bill Asha ([phone number], [email address]) monthly"
+    },
+    { "text": "Merge all PDFs in a folder", "masked": "Merge all PDFs in a folder" }
+  ]
+}

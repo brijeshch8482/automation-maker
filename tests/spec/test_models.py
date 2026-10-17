@@ -1,9 +1,9 @@
 import pytest
 from pydantic import ValidationError
-from spec.catalog import BlockArgs, catalog_json_schema
-from spec.models import SpecField, TableField
 
 from spec import BLOCKS, FIELD_TYPES, AutomationSpec
+from spec.catalog import BlockArgs, catalog_json_schema
+from spec.models import SpecField, TableField
 
 
 def test_invoice_spec_parses(invoice_spec):

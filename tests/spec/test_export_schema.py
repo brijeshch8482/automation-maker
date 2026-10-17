@@ -1,6 +1,7 @@
 import json
 
 import jsonschema
+
 from spec.export_schema import SCHEMA_DIR, automation_spec_schema, main, rendered_files
 
 

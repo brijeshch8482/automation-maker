@@ -30,6 +30,7 @@ const VIEWPORTS = { desktop: { width: 1280, height: 860 }, mobile: { width: 390,
 async function shot(page, name, device) {
   // Sticky elements are drawn where the viewport is; full-page shots start from the top.
   await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(250); // let colour transitions finish
   const file = join(outDir, `${name}-${device}.png`);
   await page.screenshot({ path: file, fullPage: true });
   console.log(`saved ${file}`);
@@ -38,7 +39,9 @@ async function shot(page, name, device) {
 // --- 1. Static pages ----------------------------------------------------------------------
 
 const STATIC_SHOTS = [
-  ["catalog", "/"],
+  ["home", "/"],
+  ["catalog", "/automations"],
+  ["catalog-filtered", "/automations", (page) => page.getByRole("button", { name: "PDF", exact: true }).click()],
   ["invoice-generator", "/automations/invoice-generator"],
   [
     "invoice-generator-setup",
@@ -60,7 +63,11 @@ const STATIC_SHOTS = [
             "and email it to asha@example.com every month.",
         ),
   ],
+  ["privacy", "/privacy"],
+  ["terms", "/terms"],
   ["not-found", "/automations/nope"],
+  // The menu button only exists at phone width.
+  ["menu-open", "/", (page) => page.getByRole("button", { name: "Open menu" }).click(), ["mobile"]],
 ];
 
 async function staticShots(browser) {
@@ -69,9 +76,13 @@ async function staticShots(browser) {
   try {
     for (const [device, viewport] of Object.entries(VIEWPORTS)) {
       const page = await browser.newPage({ viewport });
-      for (const [name, path, action] of STATIC_SHOTS) {
+      for (const [name, path, action, devices] of STATIC_SHOTS) {
+        if (devices && !devices.includes(device)) continue;
         await page.goto(`${SITE}${path}`, { waitUntil: "networkidle" });
-        if (action) await action(page);
+        if (action) {
+          await action(page);
+          await page.waitForTimeout(400); // let colour transitions finish
+        }
         await shot(page, name, device);
       }
       await page.close();

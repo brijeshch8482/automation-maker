@@ -3,15 +3,16 @@ import { Link } from "react-router";
 import { listMyJobs } from "../api";
 import RequireLogin from "../components/RequireLogin";
 import StateBadge from "../components/StateBadge";
-import { ErrorText, Spinner } from "../components/ui";
+import { ErrorText, Spinner, usePageMeta } from "../components/ui";
 import { formatDate } from "../lib/jobs";
 import { useAsync } from "../lib/useAsync";
 
 export default function MyJobsPage() {
+  usePageMeta("My apps");
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My automations</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My apps</h1>
         <Link
           to="/custom"
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"

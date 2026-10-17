@@ -5,16 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { invoiceSpec, makeJob, mockFetch, renderAt, useApi } from "../test/helpers";
 
 describe("with the API", () => {
-  test("catalog comes from the API", async () => {
+  test("the catalog renders without calling the API", async () => {
     useApi(null);
-    const calls = mockFetch(({ path }) =>
-      path === "/automations"
-        ? { body: [{ id: "x", title: "From API", description: "d", category: "pdf", version: "1.0.0", network: { required: false, domains: [] } }] }
-        : undefined,
-    );
-    renderAt("/");
-    expect(await screen.findByText("From API")).toBeTruthy();
-    expect(calls[0]?.auth).toBeNull(); // catalog needs no login
+    const calls = mockFetch(() => undefined);
+    renderAt("/automations");
+    expect(await screen.findByRole("link", { name: /Make PDF/ })).toBeTruthy();
+    expect(calls).toHaveLength(0);
   });
 
   test("custom page asks signed-out users to sign in", async () => {
@@ -32,7 +28,7 @@ describe("with the API", () => {
     await user.type(screen.getByLabelText("Dev user name"), "alice");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText(/No custom automations yet/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "My automations" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "My apps" })).toBeTruthy();
   });
 
   test("submitting a description creates a job and opens it", async () => {

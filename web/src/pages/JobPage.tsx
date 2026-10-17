@@ -15,13 +15,14 @@ import RequireLogin from "../components/RequireLogin";
 import SpecEditor from "../components/SpecEditor";
 import SpecPreview from "../components/SpecPreview";
 import StateBadge from "../components/StateBadge";
-import { Button, Card, ErrorText, Spinner } from "../components/ui";
+import { Button, Card, ErrorText, Spinner, usePageMeta } from "../components/ui";
 import { ATTEMPT_LABELS, ATTEMPT_STATUS_LABELS, formatDate } from "../lib/jobs";
 import { useJob } from "../lib/useJob";
 import type { AutomationSpec } from "../types/spec";
 import NotFoundPage from "./NotFoundPage";
 
 export default function JobPage() {
+  usePageMeta("Your app");
   return (
     <RequireLogin>
       <JobLoader />
@@ -45,7 +46,7 @@ function JobView({ job, onJob, stale }: { job: Job; onJob: (job: Job) => void; s
     <div className="space-y-6">
       <div>
         <Link to="/me/jobs" className="text-sm font-medium text-indigo-700 hover:underline">
-          ← My automations
+          ← My apps
         </Link>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">

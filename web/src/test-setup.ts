@@ -10,3 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
 });
+
+// jsdom has no scrolling; the layout scrolls to the top on every page change.
+window.scrollTo = () => {};
+Element.prototype.scrollIntoView = () => {};

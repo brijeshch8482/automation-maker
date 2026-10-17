@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { useAuth } from "../auth";
-import { Button, Card, ErrorText } from "../components/ui";
+import { Button, Card, ErrorText, usePageMeta } from "../components/ui";
 
 const inputClass =
   "mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20";
@@ -13,6 +13,7 @@ function safeNext(value: string | null): string {
 }
 
 export default function LoginPage() {
+  usePageMeta("Sign in");
   const { mode, session, signInWithEmail, devSignIn, signOut } = useAuth();
   const [params] = useSearchParams();
   const location = useLocation();

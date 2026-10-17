@@ -102,6 +102,7 @@ Do the steps in this order; later steps need values from earlier ones.
    | `VITE_API_URL` | `https://makemyexe-api.onrender.com` |
    | `VITE_SUPABASE_URL` | `https://<ref>.supabase.co` |
    | `VITE_SUPABASE_ANON_KEY` | the **publishable key** `sb_publishable_…` (the name predates the new key format) |
+   | `VITE_CONTACT_EMAIL` | optional: a public address for the footer, Privacy and Terms pages (e.g. a support mailbox, not a personal one) |
 
    - **Don't set `VITE_DEV_AUTH`** on Pages.
    - `VITE_` variables are baked into the public JavaScript, so only ever put browser-safe values here: the publishable key yes, the secret key never.

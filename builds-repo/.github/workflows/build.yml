@@ -107,7 +107,7 @@ jobs:
             dist/Guide.pdf
             dist/report.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 3 # Job 2 takes it minutes later; 500 MB of storage on GitHub Free
 
   publish:
     name: publish (secrets, no generated code)

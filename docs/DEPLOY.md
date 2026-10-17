@@ -231,6 +231,20 @@ Apps are delivered as signed packs, and the Runner runs only packs signed with a
 3. **Public halves into the repo:** add `"catalog-1": "<hex>"` and `"jobs-1": "<hex>"` to `build/trusted_keys.json` in a PR, or send me the two hex lines: they're public, so they may be shared.
 4. **Delete the `.pem` files** from your computer, or keep them offline (on a USB stick, say) in case you need them. A lost key just means a new key id (`catalog-2`) and a Runner release.
 
+## 10. Staying inside the free storage
+
+| Where | Free limit | What keeps us inside it |
+|---|---|---|
+| GitHub Actions artifacts (private repos, GitHub Free) | **500 MB in all**; once it's full, Actions usage is blocked until old artifacts go | Every upload expires in at most 7 days (a test checks this). App, custom-app and Runner zips are kept only on `main`, where *publish catalog* takes them minutes later; a PR keeps only `report.json` (3 days). Signed packs between jobs: 1 day. automation-builds build artifacts: 3 days. |
+| Cloudflare R2 | 10 GB-month, free egress | Runner + packs (Phase 2b): one Runner per version, packs are KB. Lifecycle rules (Phase 2b part 2): custom apps deleted after 14 days (the spec can be rebuilt), the latest 2 catalog versions kept. |
+| Supabase | 500 MB database | Specs are a few KB; descriptions are deleted after 30 days. |
+
+**If GitHub storage fills up anyway:**
+1. Download anything you still need from the Actions run pages.
+2. Run Actions › *Clean old artifacts* › Run workflow. Its `older_than_hours` input defaults to 24, and `0` deletes all of them.
+
+The workflow runs only when started by hand and uses only the run's own `GITHUB_TOKEN`. GitHub counts storage as an average over the month, so the usage figure in Settings › Billing drops over the following days, not at once.
+
 ## Running the API image locally
 
 ```bash

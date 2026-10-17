@@ -28,5 +28,12 @@
     { "block": "file.save", "args": { "source": "pdf", "folder": "@settings.output_folder", "name": "{invoice_no}.pdf" } }
   ],
   "output": { "type": "file", "open_after": true },
-  "sample_data": { "customer_name": "Asha Traders", "items": [{ "description": "Sample item", "qty": 2, "rate": 500 }] }
+  "sample_data": {
+    "business_name": "Sample Business",
+    "customer_name": "Asha Traders",
+    "items": [
+      { "description": "Sample item", "qty": 2, "rate": 500 },
+      { "description": "Another sample item", "qty": 1.5, "rate": 1200 }
+    ]
+  }
 }

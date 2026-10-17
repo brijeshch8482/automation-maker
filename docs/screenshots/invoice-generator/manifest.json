@@ -1,0 +1,22 @@
+{
+  "automation": "invoice-generator",
+  "version": "1.0.0",
+  "screens": [
+    {
+      "file": "01-setup.png",
+      "caption": "The first time, enter your details. They are saved on this PC."
+    },
+    {
+      "file": "02-fill-in.png",
+      "caption": "Fill in the form. Required fields are marked with *."
+    },
+    {
+      "file": "03-result.png",
+      "caption": "Press Run. Your result is saved as a new file; open it from here."
+    },
+    {
+      "file": "04-check-fields.png",
+      "caption": "If something is missing, the field is highlighted. Nothing runs until it's fixed."
+    }
+  ]
+}

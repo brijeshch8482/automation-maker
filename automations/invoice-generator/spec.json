@@ -1,0 +1,31 @@
+{
+  "id": "invoice-generator",
+  "version": "1.0.0",
+  "title": "Invoice Generator",
+  "category": "documents",
+  "network": { "required": false, "domains": [] },
+  "settings": [
+    { "key": "business_name", "type": "text", "label": "Business name", "required": true },
+    { "key": "gstin", "type": "text", "label": "GSTIN" },
+    { "key": "logo", "type": "image_file", "label": "Logo" },
+    { "key": "output_folder", "type": "folder", "label": "Save invoices to" }
+  ],
+  "inputs": [
+    { "key": "customer_name", "type": "text", "label": "Customer name", "required": true },
+    { "key": "customer_phone", "type": "phone", "label": "Phone" },
+    { "key": "items", "type": "table", "label": "Items", "columns": [
+      { "key": "description", "type": "text" },
+      { "key": "qty", "type": "number" },
+      { "key": "rate", "type": "money" }
+    ]},
+    { "key": "tax_percent", "type": "number", "label": "GST %", "default": 18 }
+  ],
+  "steps": [
+    { "block": "counter.next", "args": { "name": "invoice_no", "prefix": "INV-" }, "out": "invoice_no" },
+    { "block": "calc.line_totals", "args": { "table": "items", "qty": "qty", "rate": "rate", "tax": "tax_percent" }, "out": "totals" },
+    { "block": "pdf.render_template", "args": { "template": "invoice_basic" }, "out": "pdf" },
+    { "block": "file.save", "args": { "source": "pdf", "folder": "@settings.output_folder", "name": "{invoice_no}.pdf" } }
+  ],
+  "output": { "type": "file", "open_after": true },
+  "sample_data": { "customer_name": "Asha Traders", "items": [{ "description": "Sample item", "qty": 2, "rate": 500 }] }
+}

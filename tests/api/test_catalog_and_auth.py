@@ -70,7 +70,7 @@ async def test_supabase_jwt(settings):
 
     async with client:
         assert (await client.get("/me/jobs", headers=token())).status_code == 200
-        expired = token(exp=int(time.time()) - 10)
+        expired = token(exp=int(time.time()) - 120)  # beyond the 30 s clock-skew leeway
         assert (await client.get("/me/jobs", headers=expired)).status_code == 401
         assert (await client.get("/me/jobs", headers=token(aud="other"))).status_code == 401
         forged = {

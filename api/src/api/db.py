@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, TypeDecorator
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -118,13 +119,55 @@ class JobAttempt(Base):
     job: Mapped[Job] = relationship(back_populates="attempts")
 
 
+POSTGRES_DRIVERS = {"postgres", "postgresql", "postgresql+psycopg2", "postgresql+asyncpg"}
+SSL_MODES = {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+# Supabase's Transaction pooler (port 6543) can't keep prepared statements between queries.
+TRANSACTION_POOLER_PORT = 6543
+
+
+def engine_options(url: str) -> tuple[str, dict[str, Any]]:
+    """Turn DATABASE_URL into an async SQLAlchemy URL and engine options.
+
+    Accepts Supabase's Session pooler string as copied from the dashboard
+    (postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres),
+    switches it to asyncpg and requires SSL unless the URL says otherwise (sslmode=disable for
+    a local Postgres). SQLite URLs pass through unchanged.
+    """
+    if url.startswith("sqlite"):
+        return url, {}
+    parsed = make_url(url)
+    if parsed.drivername not in POSTGRES_DRIVERS:
+        raise ValueError(f"unsupported DATABASE_URL driver {parsed.drivername!r}")
+    query = dict(parsed.query)
+    sslmode = str(query.pop("sslmode", "require"))
+    if sslmode not in SSL_MODES:
+        raise ValueError(f"unsupported sslmode {sslmode!r}")
+    connect_args: dict[str, Any] = {"ssl": sslmode}
+    if parsed.port == TRANSACTION_POOLER_PORT:
+        connect_args["statement_cache_size"] = 0
+        query["prepared_statement_cache_size"] = "0"
+    parsed = parsed.set(drivername="postgresql+asyncpg", query=query)
+    return parsed.render_as_string(hide_password=False), {
+        "connect_args": connect_args,
+        # The free pooler allows few clients: keep the pool small and drop stale connections
+        # (the pooler closes idle ones, and Render sleeps the service).
+        "pool_size": 3,
+        "max_overflow": 2,
+        "pool_timeout": 30,
+        "pool_recycle": 300,
+        "pool_pre_ping": True,
+    }
+
+
 class Database:
     def __init__(self, url: str) -> None:
-        self.engine: AsyncEngine = create_async_engine(url)
+        url, options = engine_options(url)
+        self.url = url
+        self.engine: AsyncEngine = create_async_engine(url, **options)
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 
     async def create_all(self) -> None:
-        # Phase 3 dev schema. Alembic migrations come with the first Postgres deployment.
+        """Local dev and tests only (SQLite). Deployments run Alembic: python -m api.migrate."""
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 

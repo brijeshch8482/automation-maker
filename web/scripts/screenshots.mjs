@@ -47,6 +47,7 @@ const STATIC_SHOTS = [
   ],
   ["pdf-merge", "/automations/pdf-merge"],
   ["bulk-rename", "/automations/bulk-rename"],
+  ["make-pdf", "/automations/make-pdf"],
   ["custom-empty", "/custom"],
   [
     "custom-pii-warning",

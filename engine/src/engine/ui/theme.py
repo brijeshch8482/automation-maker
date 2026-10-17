@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
@@ -11,6 +13,7 @@ INK = "#0f172a"
 MUTED = "#64748b"
 BORDER = "#cbd5e1"
 ERROR = "#be123c"
+CHEVRON = (Path(__file__).parent / "chevron-down.svg").as_posix()
 
 STYLESHEET = f"""
 QWidget {{ color: {INK}; font-size: 10pt; }}
@@ -34,6 +37,8 @@ QLineEdit, QPlainTextEdit, QDateEdit, QComboBox, QListWidget, QTableWidget {{
     selection-background-color: #c7d2fe; selection-color: {INK};
 }}
 QLineEdit:focus, QPlainTextEdit:focus, QDateEdit:focus, QComboBox:focus {{ border: 1px solid {ACCENT}; }}
+QComboBox::drop-down {{ border: none; width: 24px; }}
+QComboBox::down-arrow {{ image: url("{CHEVRON}"); width: 12px; height: 12px; }}
 QLineEdit[readOnly="true"] {{ background: #f8fafc; color: {MUTED}; }}
 QLineEdit[invalid="true"], QPlainTextEdit[invalid="true"] {{ border: 1px solid {ERROR}; }}
 QTableWidget {{ padding: 0; gridline-color: #e2e8f0; }}

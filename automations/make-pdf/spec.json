@@ -1,0 +1,58 @@
+{
+  "id": "make-pdf",
+  "version": "1.0.0",
+  "title": "Make PDF",
+  "description": "Turn photos, screenshots, scans and PDFs into one PDF, in the order you choose. Phone photos are turned the right way up. Your original files stay as they are.",
+  "category": "pdf",
+  "network": { "required": false, "domains": [] },
+  "settings": [
+    { "key": "output_folder", "type": "folder", "label": "Save PDFs to" }
+  ],
+  "inputs": [
+    {
+      "key": "files",
+      "type": "files",
+      "label": "Photos, screenshots or PDFs, in order",
+      "required": true,
+      "extensions": ["jpg", "jpeg", "png", "webp", "bmp", "tif", "tiff", "gif", "heic", "heif", "pdf"],
+      "min_count": 1,
+      "help": "Each photo becomes one page; a PDF adds all its pages. The first file in the list comes first."
+    },
+    {
+      "key": "page_size",
+      "type": "select",
+      "label": "Page size",
+      "options": ["A4", "Letter", "Same as each photo"],
+      "default": "A4"
+    },
+    {
+      "key": "margin",
+      "type": "select",
+      "label": "White border around photos",
+      "options": ["None", "Small", "Normal"],
+      "default": "Small"
+    },
+    {
+      "key": "smaller",
+      "type": "checkbox",
+      "label": "Make the file smaller (for email or WhatsApp)"
+    },
+    { "key": "file_name", "type": "text", "label": "Name of the PDF", "required": true, "default": "My PDF" }
+  ],
+  "steps": [
+    {
+      "block": "pdf.from_files",
+      "args": { "files": "files", "page_size": "page_size", "margin": "margin", "smaller": "smaller" },
+      "out": "pdf"
+    },
+    { "block": "file.save", "args": { "source": "pdf", "folder": "@settings.output_folder", "name": "{file_name}.pdf" } }
+  ],
+  "output": { "type": "file", "open_after": true },
+  "sample_data": {
+    "files": ["samples/Receipt photo.jpg", "samples/Screenshot.png", "samples/Notes.pdf"],
+    "page_size": "A4",
+    "margin": "Small",
+    "smaller": false,
+    "file_name": "Receipt and notes"
+  }
+}

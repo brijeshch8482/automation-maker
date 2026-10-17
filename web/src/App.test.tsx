@@ -48,3 +48,14 @@ test("PDF Merge keeps originals and lists file names", async () => {
     "2 files: Bill-March.pdf, Bill-April.pdf",
   );
 });
+
+test("Make PDF lists photos and PDFs and shows its options", async () => {
+  renderAt("/automations/make-pdf");
+  expect(await screen.findByText(/original files are never changed/)).toBeTruthy();
+  expect(screen.getByLabelText(/Photos, screenshots or PDFs/)).toHaveProperty(
+    "value",
+    "3 files: Receipt photo.jpg, Screenshot.png, Notes.pdf",
+  );
+  expect(screen.getByLabelText("Page size")).toHaveProperty("value", "A4");
+  expect(screen.getByLabelText(/Make the file smaller/)).toHaveProperty("checked", false);
+});

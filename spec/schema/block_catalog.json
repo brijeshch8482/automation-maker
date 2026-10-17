@@ -235,6 +235,65 @@
       "type": "object"
     }
   },
+  "pdf.from_files": {
+    "description": "Make one PDF from photos, screenshots, scans (JPG, PNG, WebP, BMP, TIFF, GIF, HEIC) and pages of existing PDFs, in the given order. Photos are turned upright, put on A4, Letter or a page their own size, and scaled to print quality to keep the file small. Originals are only read.",
+    "produces": "PDF document",
+    "args": {
+      "additionalProperties": false,
+      "description": "Options come from inputs (usually select/checkbox fields); left out means the default.",
+      "properties": {
+        "files": {
+          "title": "Files",
+          "type": "string",
+          "x-ref": "value"
+        },
+        "page_size": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-ref": "value"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Size"
+        },
+        "margin": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-ref": "value"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Margin"
+        },
+        "smaller": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-ref": "value"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Smaller"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "PdfFromFilesArgs",
+      "type": "object"
+    }
+  },
   "pdf.merge": {
     "description": "Merge the selected PDF files, in order, into one PDF. Originals are not changed.",
     "produces": "PDF document",

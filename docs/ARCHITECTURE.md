@@ -29,7 +29,8 @@
 | Billing for AI | Founder's Claude subscription | Anthropic API key (pay per use) |
 | Windows build | GitHub Actions `windows-latest` | Same |
 | Signing | None (unsigned, internal testers only) | Code-signing certificate in the trusted build job |
-| FastAPI hosting | Local + named Cloudflare Tunnel (stable hostname), or Render/Railway | Render/Railway (or similar) |
+| Web hosting | Cloudflare Pages, free (`makemyexe.pages.dev`) | Same, on `makemyexe.com` |
+| FastAPI hosting | Render free web service, Docker (`makemyexe-api.onrender.com`), kept awake by the cron-job.org watchdog ping (§6.1). Local + Cloudflare Tunnel only for debugging callbacks | Render Starter or Cloud Run, on `api.makemyexe.com` |
 
 The switch from internal to live replaces only the `GenerationProvider` implementation (§11). The web flow, job states, callbacks and build pipeline stay the same.
 
@@ -131,6 +132,27 @@ Engine sync: a workflow in `automation-maker` pushes `engine/ spec/ tools/ build
 | Doc/PDF/Excel libs | reportlab or fpdf2, pypdf, pikepdf, openpyxl, python-docx, Pillow |
 | Packaging | PyInstaller `--onedir`, zipped (internal); Inno Setup per-user installer (live) |
 | Checks | Ruff, pytest (Qt offscreen), Bandit, pip-audit, AST rules (`tools/check_job`) |
+| Hosting (web) | Cloudflare Pages (static `web/dist`, auto-deploy from `main`) |
+| Hosting (API) | Render web service from `api/Dockerfile` (`render.yaml` blueprint) |
+| Scheduler | cron-job.org: calls the watchdog endpoint every 10 min |
+
+### 6.1 Free hosting for the internal phase (₹0)
+
+| Part | Host | Free-tier facts that matter |
+|---|---|---|
+| Web | Cloudflare Pages | Unlimited bandwidth, never sleeps, free custom domain |
+| API | Render free web service (Docker) | Sleeps after 15 min idle (30–50 s cold start); 750 instance hours/month; 500 build minutes/month; 512 MB RAM; no persistent disk |
+| DB + Auth | Supabase free | Pauses after ~1 week with no DB activity; resume from the dashboard |
+| Storage | Cloudflare R2 | 10 GB-month free, free egress |
+| Scheduler | cron-job.org | Free |
+
+**Keep-awake + watchdog:** cron-job.org calls `POST /internal/watchdog` (bearer `WATCHDOG_TOKEN`) every 10 minutes. The same call keeps the API awake (about 744 h/month, inside the 750 free hours, so this must be the **only** free Render web service on the account) and fails jobs stuck without a callback (§3). Don't use a GitHub Actions cron for this, because per-run minute rounding would use up the free Actions minutes.
+
+**Render settings:** Build Filters limited to `api/**`, `spec/**`, `pyproject.toml`, `uv.lock`, so web-only commits don't spend build minutes. Health check path: `/healthz`. All secrets are Render environment variables, never committed.
+
+**URLs and CORS:** web `https://makemyexe.pages.dev`, API `https://makemyexe-api.onrender.com`. FastAPI's CORS allows only the web origin(s), from the `WEB_ORIGINS` env var. The routines' cloud environment allowlists the exact API hostname.
+
+**Exit plan:** if cold starts or Render policy become a problem, move the same Docker image to Google Cloud Run (free tier, 1–3 s cold starts, needs a billing card) or Render Starter ($7/month). Nothing outside hosting config changes.
 
 ---
 
@@ -220,6 +242,8 @@ EXE = Engine (same for all, fully tested) + spec.json + templates/assets + optio
 | GET | `/me/jobs` | The user's custom automations |
 | POST | `/internal/routine-callback` | From routines; per-job bearer token |
 | POST | `/internal/build-callback` | From GitHub Actions Job 2; HMAC signature |
+| POST | `/internal/watchdog` | From cron-job.org every 10 min; bearer `WATCHDOG_TOKEN`; fails stuck jobs and keeps Render awake |
+| GET | `/healthz` | Render health check; no DB call |
 
 Access: catalog browsing and downloads need no login; custom jobs need a login. Raw descriptions are deleted after 30 days; specs are kept.
 
@@ -282,7 +306,7 @@ automation-maker/
 ## 14. Open decisions
 
 - Pricing: free catalog + paid custom builds, or a subscription.
-- Product name + domain.
+- Buy makemyexe.com (name decided: MakeMyEXE).
 - Code-signing route (country/business registration).
-- Live hosting for FastAPI + web (Render/Railway or other).
+- Live-phase API host: Render Starter vs Cloud Run (internal phase is decided: §6.1).
 - Later: online automations (🌐) with a domain allowlist; macOS.

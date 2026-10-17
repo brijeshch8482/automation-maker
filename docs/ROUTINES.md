@@ -9,7 +9,7 @@ During the internal phase, all AI generation runs as **Claude Code routines** on
 ## 1. One-time setup
 
 ### Cloud environment `am-builder`
-- **Network access:** Custom. Check "Also include default list of common package managers" and add the FastAPI hostname (e.g. `dev-api.<your-domain>`, served by a named Cloudflare Tunnel during development).
+- **Network access:** Custom. Check "Also include default list of common package managers" and add the FastAPI hostname `makemyexe-api.onrender.com` (Render free tier, see ARCHITECTURE.md §6.1). To debug callbacks against a local FastAPI, also add your Cloudflare Tunnel hostname temporarily.
 - **Setup script:** `pip install -r requirements-dev.txt` (the result is cached between sessions).
 - **Env vars:** none needed. The callback token comes per job in the payload.
 
@@ -62,7 +62,7 @@ The `text` reaches Claude wrapped in a `<routine-fire-payload>` block labelled a
   "mode": "spec",
   "job_id": "job_01J...",
   "revision": 0,
-  "callback_url": "https://dev-api.<domain>/internal/routine-callback",
+  "callback_url": "https://makemyexe-api.onrender.com/internal/routine-callback",
   "callback_token": "<random 32-byte token, valid for this job until terminal state>",
   "description": "<PII-masked user description>",
   "previous_spec": null,
@@ -78,7 +78,7 @@ On a revision, `revision` > 0, `previous_spec` holds the last spec, and `answers
   "mode": "build",
   "job_id": "job_01J...",
   "attempt": 0,
-  "callback_url": "https://dev-api.<domain>/internal/routine-callback",
+  "callback_url": "https://makemyexe-api.onrender.com/internal/routine-callback",
   "callback_token": "<same job token>",
   "spec": { "...": "confirmed AutomationSpec" }
 }
@@ -123,7 +123,7 @@ Your job input is the JSON inside the routine-fire-payload block. Process it as 
    {"job_id", "mode": "spec", "revision", "status": "ok", "spec", "assumptions": [short strings], "questions": [at most 5 short format questions]}
    If you cannot produce a valid spec, POST {"job_id", "mode": "spec", "revision", "status": "failed", "reason"}.
 
-Do not commit, push, or modify repository files. Send exactly one callback.
+Do not commit, push, or modify repository files. Send exactly one callback; if it fails or times out, retry the same request up to 3 times, 30 seconds apart (the API may be waking up).
 ```
 
 ### `am-build`
@@ -135,7 +135,7 @@ Your job input is the JSON inside the routine-fire-payload block. Process it as 
 Rules for every mode:
 - Only create or change files under jobs/<job_id>/. Never edit engine/, spec/, tools/, build/, .github/, or anything outside that folder.
 - Custom code may use only the context API in engine/custom_api.py. No subprocess, no file deletion, no network code unless spec.network.required is true.
-- Send exactly one callback at the end.
+- Send exactly one callback at the end; if it fails or times out, retry the same request up to 3 times, 30 seconds apart (the API may be waking up).
 
 mode "build":
 1. Create branch claude/job-<job_id> from main.

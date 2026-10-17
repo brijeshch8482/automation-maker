@@ -317,6 +317,23 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: python3 -m build.publish_catalog --artifacts artifacts --commit "$GITHUB_SHA"
 
+  worker:
+    name: worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Tests (token checks, refusals; the merge itself is tested by pytest)
+        run: npm test
+
   web:
     name: web
     runs-on: ubuntu-latest

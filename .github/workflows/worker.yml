@@ -1,0 +1,49 @@
+# Deploy the download Worker (worker/) to Cloudflare, by hand only (Actions > Deploy download
+# Worker > Run workflow, on main). Not on push: a job naming an environment that doesn't exist
+# yet would create it unprotected. Needs the `worker` environment (deployment branches: main only) with secrets
+# CLOUDFLARE_API_TOKEN (Workers Scripts: Edit, this account only), CLOUDFLARE_ACCOUNT_ID and
+# DOWNLOAD_TOKEN_SECRET (the same value as in Render). Until they exist it only warns.
+# docs/DEPLOY.md §11. Never runs generated code: it deploys worker/ from main.
+name: Deploy download Worker
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-worker
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: worker
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DOWNLOAD_TOKEN_SECRET: ${{ secrets.DOWNLOAD_TOKEN_SECRET }}
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Tests
+        run: npm test
+
+      - name: Deploy
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$DOWNLOAD_TOKEN_SECRET" ]; then
+            echo "::warning::The worker environment is not set up yet (docs/DEPLOY.md §11); nothing deployed."
+            exit 0
+          fi
+          npx --yes wrangler@4 deploy
+          printf '%s' "$DOWNLOAD_TOKEN_SECRET" | npx --yes wrangler@4 secret put DOWNLOAD_TOKEN_SECRET

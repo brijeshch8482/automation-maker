@@ -1,0 +1,12 @@
+{
+  "name": "makemyexe-download",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker: merges the Runner, library layers and an app pack into one zip (docs/ARCHITECTURE.md §8.6)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}

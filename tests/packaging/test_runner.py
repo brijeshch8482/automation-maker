@@ -83,3 +83,16 @@ def test_ci_builds_packs_on_linux_and_the_runner_on_windows():
     assert "keys" not in upload["with"]["path"].replace("ci-keys.json", "")
     run = json.dumps(runner_job)
     assert "build.runner" in run and "--launch-check" in run and "--check-pack" in run
+
+
+def test_largest_parts_groups_by_folder(tmp_path):
+    (tmp_path / "_internal" / "PySide6" / "plugins").mkdir(parents=True)
+    (tmp_path / "MakeMyEXE.exe").write_bytes(b"x" * 3_000_000)
+    (tmp_path / "_internal" / "PySide6" / "Qt6Gui.dll").write_bytes(b"x" * 2_000_000)
+    (tmp_path / "_internal" / "PySide6" / "plugins" / "a.dll").write_bytes(b"x" * 600_000)
+    (tmp_path / "_internal" / "PySide6" / "plugins" / "b.dll").write_bytes(b"x" * 600_000)
+    assert runner.largest_parts(tmp_path) == {
+        "MakeMyEXE.exe": 3.0,
+        "_internal/PySide6/Qt6Gui.dll": 2.0,
+        "_internal/PySide6/plugins": 1.2,
+    }

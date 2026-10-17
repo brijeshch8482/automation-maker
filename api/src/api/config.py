@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     r2_secret_access_key: SecretStr = SecretStr("")
     r2_bucket: str = ""
 
+    # Downloads merged by the Cloudflare Worker (worker/, Phase 2b): its URL and the secret it
+    # shares with the API. Used only for apps whose manifest entry has a signed pack; others keep
+    # the presigned zip link above. Both empty: Worker downloads off.
+    download_worker_url: str = ""
+    download_token_secret: SecretStr = SecretStr("")
+
     # Auth: Supabase access tokens, verified with the project's JWKS (RS256/ES256) at
     # {supabase_url}/auth/v1/.well-known/jwks.json. supabase_jwt_secret (HS256) is only for
     # legacy projects. dev_auth accepts "Bearer dev:<user-id>"; never in a deployment.
@@ -70,6 +76,8 @@ class Settings(BaseSettings):
     max_repairs: int = 2
     unconfirmed_expiry_days: int = 30
     description_retention_days: int = 30
+    # Routine and build logs (attempt details, the last build report) of finished jobs.
+    build_log_retention_days: int = 30
 
     @field_validator("cors_origins", mode="before")
     @classmethod

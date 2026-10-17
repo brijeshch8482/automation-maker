@@ -147,6 +147,94 @@
       "type": "object"
     }
   },
+  "files.rename": {
+    "description": "Plan new names for a list of files from a pattern. Nothing changes until the user confirms the preview; every rename goes to the undo log and clashes get ' (2)'.",
+    "produces": "rename plan (applied after the preview)",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "title": "Files",
+          "type": "string",
+          "x-ref": "value"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string",
+          "x-per-item": [
+            "n",
+            "name",
+            "date"
+          ],
+          "x-template": true
+        },
+        "start": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-ref": "value"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "default": 1,
+          "title": "Start"
+        },
+        "pad": {
+          "default": 0,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Pad",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "files",
+        "name"
+      ],
+      "title": "FilesRenameArgs",
+      "type": "object"
+    }
+  },
+  "files.scan": {
+    "description": "List the files directly inside a folder (no subfolders, hidden files skipped), optionally only some extensions, sorted naturally by name or by date modified.",
+    "produces": "list of files",
+    "args": {
+      "additionalProperties": false,
+      "properties": {
+        "folder": {
+          "title": "Folder",
+          "type": "string",
+          "x-ref": "value"
+        },
+        "extensions": {
+          "items": {
+            "pattern": "^[a-z0-9]+$",
+            "type": "string"
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
+        "sort": {
+          "default": "name",
+          "enum": [
+            "name",
+            "modified"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder"
+      ],
+      "title": "FilesScanArgs",
+      "type": "object"
+    }
+  },
   "pdf.merge": {
     "description": "Merge the selected PDF files, in order, into one PDF. Originals are not changed.",
     "produces": "PDF document",

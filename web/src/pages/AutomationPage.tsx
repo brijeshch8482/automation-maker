@@ -3,7 +3,14 @@ import { Link, useParams } from "react-router";
 import { getAutomation } from "../api";
 import NetworkBadge from "../components/NetworkBadge";
 import SpecPreview from "../components/SpecPreview";
-import { CATEGORY_LABELS, fieldLabel, inputsOf, isOnline, settingsOf } from "../lib/fields";
+import {
+  CATEGORY_LABELS,
+  changesFiles,
+  fieldLabel,
+  inputsOf,
+  isOnline,
+  settingsOf,
+} from "../lib/fields";
 import { useAsync } from "../lib/useAsync";
 import type { AutomationSpec } from "../types/spec";
 import NotFoundPage from "./NotFoundPage";
@@ -69,7 +76,14 @@ function AutomationDetails({ spec }: { spec: AutomationSpec }) {
               ) : (
                 <li>Never connects to the internet.</li>
               )}
-              <li>Your original files are never changed. Results are saved as new files.</li>
+              {changesFiles(spec) ? (
+                <li>
+                  Files are renamed only after you check a preview of the new names. Undo puts the
+                  old names back, and nothing is ever deleted.
+                </li>
+              ) : (
+                <li>Your original files are never changed. Results are saved as new files.</li>
+              )}
               <li>No tracking and no automatic updates.</li>
             </ul>
           </div>

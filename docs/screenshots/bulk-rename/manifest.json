@@ -1,0 +1,26 @@
+{
+  "automation": "bulk-rename",
+  "version": "1.0.0",
+  "screens": [
+    {
+      "file": "01-fill-in.png",
+      "caption": "Fill in the form. Required fields are marked with *."
+    },
+    {
+      "file": "02-preview.png",
+      "caption": "Press Run to see the new names first. Nothing changes until you confirm."
+    },
+    {
+      "file": "03-result.png",
+      "caption": "Done. Undo puts the old names back, even later."
+    },
+    {
+      "file": "04-undone.png",
+      "caption": "After Undo, every file has its old name again."
+    },
+    {
+      "file": "05-check-fields.png",
+      "caption": "If something is missing, the field is highlighted. Nothing runs until it's fixed."
+    }
+  ]
+}

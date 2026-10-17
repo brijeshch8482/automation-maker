@@ -8,6 +8,7 @@ import sqlite3
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,16 @@ class Store:
         self._db = self.dir / "data.sqlite3"
         with self._connect() as db:
             db.execute("CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER)")
+            # Undo log: every rename batch, recorded before it is applied (ARCHITECTURE.md §1.4).
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS undo_batches (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "created TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL)"
+            )
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS undo_moves (batch_id INTEGER NOT NULL, "
+                "seq INTEGER NOT NULL, source TEXT NOT NULL, target TEXT NOT NULL, "
+                "PRIMARY KEY (batch_id, seq))"
+            )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -76,3 +87,35 @@ class Store:
                 "ON CONFLICT(name) DO UPDATE SET value = excluded.value",
                 (name, value),
             )
+
+    # --- undo log ---
+
+    def record_batch(self, description: str, moves: list[tuple[str, str]]) -> int:
+        """Record planned moves (status 'pending') before any file is touched."""
+        with self._connect() as db:
+            cursor = db.execute(
+                "INSERT INTO undo_batches (created, description, status) VALUES (?, ?, 'pending')",
+                (datetime.now().isoformat(timespec="seconds"), description),
+            )
+            batch_id = cursor.lastrowid
+            assert batch_id is not None
+            db.executemany(
+                "INSERT INTO undo_moves (batch_id, seq, source, target) VALUES (?, ?, ?, ?)",
+                [(batch_id, seq, src, dst) for seq, (src, dst) in enumerate(moves)],
+            )
+        return batch_id
+
+    def set_batch_status(self, batch_id: int, status: str) -> None:
+        with self._connect() as db:
+            db.execute("UPDATE undo_batches SET status = ? WHERE id = ?", (status, batch_id))
+
+    def batch(self, batch_id: int) -> tuple[str, list[tuple[str, str]]] | None:
+        """(status, [(source, target), ...]) in the order they were applied."""
+        with self._connect() as db:
+            row = db.execute("SELECT status FROM undo_batches WHERE id = ?", (batch_id,)).fetchone()
+            if row is None:
+                return None
+            moves = db.execute(
+                "SELECT source, target FROM undo_moves WHERE batch_id = ? ORDER BY seq", (batch_id,)
+            ).fetchall()
+        return row[0], [(src, dst) for src, dst in moves]

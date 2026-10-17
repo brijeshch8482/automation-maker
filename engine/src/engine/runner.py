@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from engine.blocks import get_block_impl
 from engine.context import RunContext
 from engine.errors import EngineError, StepError
+from engine.values import RenamePlan
 from spec.catalog import get_block
 
 
@@ -15,6 +16,8 @@ from spec.catalog import get_block
 class RunResult:
     outs: dict[str, Any]
     last_value: Any  # what the last step produced, e.g. the saved file
+    # File changes to preview and confirm before anything on disk changes.
+    pending: list[RenamePlan] = field(default_factory=list)
 
 
 def run(ctx: RunContext) -> RunResult:
@@ -33,4 +36,4 @@ def run(ctx: RunContext) -> RunResult:
             ctx.outs[step.out] = last
     for hook in ctx.on_success:
         hook()
-    return RunResult(outs=dict(ctx.outs), last_value=last)
+    return RunResult(outs=dict(ctx.outs), last_value=last, pending=list(ctx.pending))

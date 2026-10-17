@@ -11,6 +11,7 @@ from typing import Any
 
 from engine.errors import EngineError
 from engine.storage import Store
+from engine.values import RenamePlan
 from spec.models import AutomationSpec
 
 SETTINGS_PREFIX = "@settings."
@@ -26,6 +27,8 @@ class RunContext:
     spec_dir: Path | None = None  # folder of spec.json (templates, custom_step.py)
     today: date = field(default_factory=date.today)
     outs: dict[str, Any] = field(default_factory=dict)
+    # File changes planned by steps; applied only after the user confirms the preview.
+    pending: list[RenamePlan] = field(default_factory=list)
     # Run only if every step succeeds (e.g. advancing an invoice counter).
     on_success: list[Callable[[], None]] = field(default_factory=list)
 
@@ -39,14 +42,16 @@ class RunContext:
             return self.inputs.get(ref)
         raise EngineError(f"unknown reference '{ref}'")
 
-    def render(self, template: str) -> str:
-        """Fill a `{var}` template from outs and inputs ('{invoice_no}.pdf')."""
+    def render(self, template: str, extra: dict[str, Any] | None = None) -> str:
+        """Fill a `{var}` template from `extra` (per-item values such as {n}), outs and inputs."""
         out = []
         for literal, name, spec, conversion in string.Formatter().parse(template):
             out.append(literal)
             if name is None:
                 continue
-            value = self.value(name)
+            value = extra[name] if extra and name in extra else self.value(name)
+            if value is None:
+                value = ""
             if conversion:
                 value = repr(value) if conversion == "r" else str(value)
             out.append(format(value, spec or ""))

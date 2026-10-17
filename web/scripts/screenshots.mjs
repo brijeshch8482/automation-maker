@@ -45,6 +45,8 @@ const STATIC_SHOTS = [
     "/automations/invoice-generator",
     (page) => page.getByRole("tab", { name: "Setup" }).click(),
   ],
+  ["pdf-merge", "/automations/pdf-merge"],
+  ["bulk-rename", "/automations/bulk-rename"],
   ["custom-empty", "/custom"],
   [
     "custom-pii-warning",

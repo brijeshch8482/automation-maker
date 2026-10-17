@@ -25,6 +25,7 @@ QMainWindow, #page {{ background: #f8fafc; }}
 #help {{ color: {MUTED}; font-size: 8.5pt; }}
 #fieldError {{ color: {ERROR}; font-size: 8.5pt; }}
 #banner {{ background: #fff1f2; color: {ERROR}; border: 1px solid #fecdd3; border-radius: 6px; padding: 8px; }}
+#previewTitle {{ font-size: 14pt; font-weight: 600; }}
 #resultTitle {{ font-size: 14pt; font-weight: 600; color: #065f46; }}
 #errorTitle {{ font-size: 14pt; font-weight: 600; color: {ERROR}; }}
 #currency {{ color: {MUTED}; }}

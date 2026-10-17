@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QDate, Qt, Signal
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QPlainTextEdit,
     QPushButton,
     QTableWidget,
@@ -36,6 +39,16 @@ IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "bmp"]
 
 def field_label(field: SpecField | ColumnField) -> str:
     return field.label or field.key.replace("_", " ").capitalize()
+
+
+def compact_path(path: str) -> str:
+    """Long paths are unreadable in a one-line box: show '…/parent/name', full path as tooltip."""
+    if not path:
+        return ""
+    parts = Path(path).parts
+    if len(parts) <= 3:
+        return path
+    return os.sep.join(["…", *parts[-2:]])
 
 
 def display_text(value: Any) -> str:
@@ -210,6 +223,8 @@ class PathField(FieldWidget):
         self.layout_.addWidget(self.edit, 1)
         self.layout_.addWidget(button)
 
+        self._path = ""
+
     def _pick(self) -> None:
         if self.field.type == "folder":
             path = QFileDialog.getExistingDirectory(self, field_label(self.field))
@@ -224,10 +239,12 @@ class PathField(FieldWidget):
             self.changed.emit()
 
     def value(self) -> str:
-        return self.edit.text()
+        return self._path
 
     def set_value(self, value: Any) -> None:
-        self.edit.setText(str(value or ""))
+        self._path = str(value or "")
+        self.edit.setText(compact_path(self._path))
+        self.edit.setToolTip(self._path)
 
 
 class FilesField(FieldWidget):
@@ -254,8 +271,15 @@ class FilesField(FieldWidget):
             self, field_label(self.field), "", f"Files ({pattern})"
         )
         for path in paths:
-            self.list.addItem(path)
+            self._add_item(path)
         self.changed.emit()
+
+    def _add_item(self, path: str) -> None:
+        # Show the file name; keep the full path for the run and as a tooltip.
+        item = QListWidgetItem(Path(path).name)
+        item.setData(Qt.ItemDataRole.UserRole, path)
+        item.setToolTip(path)
+        self.list.addItem(item)
 
     def _remove(self) -> None:
         for item in self.list.selectedItems():
@@ -263,12 +287,12 @@ class FilesField(FieldWidget):
         self.changed.emit()
 
     def value(self) -> list[str]:
-        return [self.list.item(i).text() for i in range(self.list.count())]
+        return [self.list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.list.count())]
 
     def set_value(self, value: Any) -> None:
         self.list.clear()
         for path in value or []:
-            self.list.addItem(str(path))
+            self._add_item(str(path))
 
     def validate(self) -> str | None:
         count = len(self.value())

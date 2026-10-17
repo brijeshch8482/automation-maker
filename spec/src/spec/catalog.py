@@ -36,7 +36,13 @@ class Ref:
 
 @dataclass(frozen=True)
 class Template:
-    """Marks a string arg with `{var}` placeholders (input keys or earlier step outs)."""
+    """Marks a string arg with `{var}` placeholders (input keys or earlier step outs).
+
+    `per_item` names extra placeholders the block fills in itself for each item it handles,
+    e.g. {n} and {name} for every file files.rename renames.
+    """
+
+    per_item: tuple[str, ...] = ()
 
 
 def InputRef(*field_types: str) -> Any:
@@ -57,6 +63,16 @@ def ColumnRef(table_arg: str) -> Any:
 
 ValueRef = Annotated[str, Ref("value"), Field(json_schema_extra={"x-ref": "value"})]
 TemplateStr = Annotated[str, Template(), Field(json_schema_extra={"x-template": True})]
+RENAME_VARS = ("n", "name", "date")
+FileNameTemplate = Annotated[
+    str,
+    Template(per_item=RENAME_VARS),
+    Field(
+        min_length=1,
+        max_length=200,
+        json_schema_extra={"x-template": True, "x-per-item": list(RENAME_VARS)},
+    ),
+]
 Name = Annotated[str, Field(pattern=KEY_PATTERN, max_length=64)]
 TableInput = InputRef("table")
 FilesInput = InputRef("files")
@@ -130,6 +146,22 @@ class FileSaveArgs(BlockArgs):
     name: TemplateStr
 
 
+class FilesScanArgs(BlockArgs):
+    folder: ValueRef
+    # Lower-case extensions without the dot; empty means every file.
+    extensions: list[Annotated[str, Field(pattern=r"^[a-z0-9]+$")]] = Field(default_factory=list)
+    sort: Literal["name", "modified"] = "name"
+
+
+class FilesRenameArgs(BlockArgs):
+    files: ValueRef
+    # New name without extension (the extension is kept): {n} counter, {name} old name,
+    # {date} modified date (YYYY-MM-DD), plus input keys and earlier outs.
+    name: FileNameTemplate
+    start: ValueRef | int = 1
+    pad: int = Field(default=0, ge=0, le=6)
+
+
 class CustomStepArgs(BlockArgs):
     function: Annotated[str, Field(pattern=r"^[a-z_][a-z0-9_]*$")] = "run"
     description: str = Field(min_length=1, max_length=2000)
@@ -168,6 +200,20 @@ _BLOCKS = [
         "Never overwrites: adds a suffix if the name exists.",
         FileSaveArgs,
         produces="path of the saved file",
+    ),
+    BlockDef(
+        "files.scan",
+        "List the files directly inside a folder (no subfolders, hidden files skipped), "
+        "optionally only some extensions, sorted naturally by name or by date modified.",
+        FilesScanArgs,
+        produces="list of files",
+    ),
+    BlockDef(
+        "files.rename",
+        "Plan new names for a list of files from a pattern. Nothing changes until the user "
+        "confirms the preview; every rename goes to the undo log and clashes get ' (2)'.",
+        FilesRenameArgs,
+        produces="rename plan (applied after the preview)",
     ),
     BlockDef(
         "custom.step",

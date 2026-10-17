@@ -7,20 +7,25 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtGui import QDesktopServices, QFont, QGuiApplication
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMainWindow,
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
+from engine.changes import UndoResult, apply_plan, undo
 from engine.context import RunContext
 from engine.errors import EngineError, StepError, error_report
 from engine.fieldvalues import initial_values
@@ -28,7 +33,7 @@ from engine.loader import LoadedSpec
 from engine.runner import RunResult, run
 from engine.storage import Store, default_output_dir
 from engine.ui.fields import FieldWidget, field_label, make_field
-from engine.values import SavedFile
+from engine.values import RenamePlan, SavedFile
 from spec.models import SpecField
 
 WINDOW_SIZE = (760, 720)
@@ -164,6 +169,8 @@ class MainWindow(QMainWindow):
         self.open_results = open_results
         self.last_result: RunResult | None = None
         self.last_error: BaseException | None = None
+        self.pending_plan: RenamePlan | None = None
+        self.last_batch: int | None = None
 
         self.setWindowTitle(self.spec.title)
         self.resize(*WINDOW_SIZE)
@@ -289,6 +296,11 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         self.last_result = result
         self.last_error = None
+        if result.pending:
+            # Files would change: show what will happen and wait for the user (ARCHITECTURE §1.5).
+            self.pending_plan = result.pending[0]
+            self._replace_result_page(self._build_preview_page(self.pending_plan))
+            return result
         self._replace_result_page(self._build_result_page(result))
         if (
             self.open_results
@@ -320,6 +332,114 @@ class MainWindow(QMainWindow):
         again = _button("Make another", lambda: self.show_page(self.run_page))
         return _scroll_page(_card(*widgets), footer=_footer(again, *buttons))
 
+    # --- file changes: preview -> apply -> undo ---
+
+    def _build_preview_page(self, plan: RenamePlan) -> QWidget:
+        title = QLabel("Check the new names")
+        title.setObjectName("previewTitle")
+        count = len(plan.moves)
+        if not count:
+            text = QLabel("Nothing to rename: every file already has its new name.")
+            text.setWordWrap(True)
+            back = _button("Back", lambda: self.show_page(self.run_page), primary=True)
+            return _scroll_page(_card(title, text), footer=_footer(back))
+
+        files = "file" if count == 1 else "files"
+        lines = [
+            f"{count} {files} in the <b>{_escape(plan.folder.name)}</b> folder will be renamed. "
+            "Nothing changes until you press Rename, and you can undo it afterwards."
+        ]
+        if plan.adjusted:
+            lines.append(
+                f"{_count(plan.adjusted, 'new name')} got a number like “(2)” because the name "
+                "was taken."
+            )
+        if plan.unchanged:
+            lines.append(f"{_count(plan.unchanged, 'file')} already named like that, left as is.")
+        text = QLabel("<br>".join(lines))
+        text.setTextFormat(Qt.TextFormat.RichText)
+        text.setWordWrap(True)
+
+        table = QTableWidget(count, 2)
+        table.setObjectName("previewTable")
+        table.setHorizontalHeaderLabels(["Now", "New name"])
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        for row, move in enumerate(plan.moves):
+            table.setItem(row, 0, QTableWidgetItem(move.source.name))
+            new = QTableWidgetItem(move.target.name)
+            new.setFont(_bold(new.font()))
+            table.setItem(row, 1, new)
+        table.setMinimumHeight(min(60 + 30 * count, 380))
+
+        cancel = _button("Cancel", lambda: self.show_page(self.run_page))
+        apply = _button(f"Rename {count} {files}", self.apply_changes, primary=True)
+        return _scroll_page(_card(title, text, table), footer=_footer(cancel, apply))
+
+    def apply_changes(self) -> int | None:
+        plan = self.pending_plan
+        if plan is None:
+            return None
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            # The description goes to the local undo log; it names no files.
+            batch = apply_plan(
+                plan, self.store, f"{self.spec.title}: renamed {len(plan.moves)} files"
+            )
+        except Exception as err:  # every failure gets the safe error screen
+            self.last_error = err
+            self._replace_result_page(self._build_error_page(err))
+            return None
+        finally:
+            QApplication.restoreOverrideCursor()
+        self.pending_plan = None
+        self.last_batch = batch
+        self._replace_result_page(self._build_applied_page(plan, batch))
+        return batch
+
+    def _build_applied_page(self, plan: RenamePlan, batch: int) -> QWidget:
+        title = QLabel("Done")
+        title.setObjectName("resultTitle")
+        count = len(plan.moves)
+        text = QLabel(
+            f"Renamed {count} {'file' if count == 1 else 'files'} in the "
+            f"<b>{_escape(plan.folder.name)}</b> folder. Changed your mind? Undo puts the old "
+            "names back."
+        )
+        text.setTextFormat(Qt.TextFormat.RichText)
+        text.setWordWrap(True)
+        text.setToolTip(str(plan.folder))
+        again = _button("Rename more", lambda: self.show_page(self.run_page))
+        undo_button = _button("Undo", lambda: self.undo_changes(batch, plan.folder))
+        open_folder = _button("Open folder", lambda: _open(plan.folder), primary=True)
+        return _scroll_page(_card(title, text), footer=_footer(again, undo_button, open_folder))
+
+    def undo_changes(self, batch: int, folder: Path) -> UndoResult | None:
+        try:
+            result = undo(self.store, batch)
+        except Exception as err:  # every failure gets the safe error screen
+            self.last_error = err
+            self._replace_result_page(self._build_error_page(err))
+            return None
+        title = QLabel("Undone")
+        title.setObjectName("resultTitle")
+        lines = [f"{_count(result.restored, 'file')} renamed back to the old names."]
+        if result.skipped:
+            lines.append(
+                f"{_count(result.skipped, 'file')} left as is: moved or renamed "
+                "since, or their old name is now used by another file."
+            )
+        text = QLabel(" ".join(lines))
+        text.setWordWrap(True)
+        back = _button("Back to the form", lambda: self.show_page(self.run_page))
+        open_folder = _button("Open folder", lambda: _open(folder), primary=True)
+        self._replace_result_page(
+            _scroll_page(_card(title, text), footer=_footer(back, open_folder))
+        )
+        return result
+
     def _build_error_page(self, error: BaseException) -> QWidget:
         title = QLabel("Something went wrong")
         title.setObjectName("errorTitle")
@@ -348,6 +468,15 @@ def _user_message(error: BaseException) -> str:
 
 def _open(path: Path) -> None:
     QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}" + ("" if n == 1 else "s")
+
+
+def _bold(font: QFont) -> QFont:
+    font.setBold(True)
+    return font
 
 
 def _escape(text: str) -> str:

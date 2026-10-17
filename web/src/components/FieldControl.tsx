@@ -18,6 +18,9 @@ interface ControlProps<F> {
 
 const asText = (value: unknown) => (value == null ? "" : String(value));
 
+/** "samples/Holiday photos" -> "Holiday photos": the app shows names, not long paths. */
+export const baseName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? "";
+
 /** The editable control for one field, as the EXE shows it. */
 export function FieldControl({ id, field, value, onChange }: ControlProps<SpecField | ColumnField>) {
   const label = fieldLabel(field);
@@ -98,13 +101,15 @@ export function FieldControl({ id, field, value, onChange }: ControlProps<SpecFi
         />
       );
     case "file":
-      return <PickerRow id={id} value={asText(value)} empty="No file selected" action="Browse…" />;
+      return <PickerRow id={id} value={baseName(asText(value))} empty="No file selected" action="Browse…" />;
     case "image_file":
-      return <PickerRow id={id} value={asText(value)} empty="No image selected" action="Browse…" />;
+      return <PickerRow id={id} value={baseName(asText(value))} empty="No image selected" action="Browse…" />;
     case "folder":
-      return <PickerRow id={id} value={asText(value)} empty="No folder selected" action="Choose folder…" />;
+      return (
+        <PickerRow id={id} value={baseName(asText(value))} empty="No folder selected" action="Choose folder…" />
+      );
     case "files": {
-      const names = Array.isArray(value) ? value.map(String) : [];
+      const names = Array.isArray(value) ? value.map((v) => baseName(String(v))) : [];
       return (
         <PickerRow
           id={id}

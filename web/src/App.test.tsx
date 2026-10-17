@@ -32,3 +32,19 @@ test("custom page warns about PII and masks it", async () => {
   expect(screen.getByRole("button", { name: "Design my automation" })).toHaveProperty("disabled", true);
   expect(screen.getByText("Custom builds open soon.")).toBeTruthy();
 });
+
+test("automations that rename files promise a preview and undo, not 'never changed'", async () => {
+  renderAt("/automations/bulk-rename");
+  expect(await screen.findByText(/renamed only after you check a preview/)).toBeTruthy();
+  expect(screen.queryByText(/original files are never changed/)).toBeNull();
+  expect(screen.getByLabelText(/Folder with the files/)).toHaveProperty("value", "Holiday photos");
+});
+
+test("PDF Merge keeps originals and lists file names", async () => {
+  renderAt("/automations/pdf-merge");
+  expect(await screen.findByText(/original files are never changed/)).toBeTruthy();
+  expect(screen.getByLabelText(/PDF files, in order/)).toHaveProperty(
+    "value",
+    "2 files: Bill-March.pdf, Bill-April.pdf",
+  );
+});

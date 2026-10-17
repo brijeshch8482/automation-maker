@@ -210,3 +210,58 @@ def test_spec_without_settings_starts_on_the_form(qapp, tmp_path):
     assert w.stack.currentWidget() is w.run_page
     assert not hasattr(w, "settings_button")
     assert load_spec(loaded.dir / "spec.json").spec.id == "pdf-merge-test"
+
+
+def test_rename_preview_apply_and_undo_in_the_window(qapp, tmp_path):
+    from PySide6.QtWidgets import QPushButton, QTableWidget
+
+    from engine.storage import Store
+    from tests.conftest import AUTOMATIONS_DIR
+
+    loaded = load_spec(AUTOMATIONS_DIR / "bulk-rename" / "spec.json")
+    inputs = loaded.sample_inputs(tmp_path / "ws")
+    folder = tmp_path / "ws" / "Holiday photos"
+    before = sorted(p.name for p in folder.iterdir())
+    w = MainWindow(
+        loaded, Store(loaded.spec.id, root=tmp_path / "d"), inputs=inputs, open_results=False
+    )
+
+    assert w.run() is not None
+    assert sorted(p.name for p in folder.iterdir()) == before  # preview only
+    table = w.result_page.findChild(QTableWidget, "previewTable")
+    assert table.rowCount() == len(before)
+    assert table.item(0, 1).text() == "Goa trip 001.jpg"
+    buttons = {b.text(): b for b in w.result_page.findChildren(QPushButton)}
+    buttons["Cancel"].click()
+    assert w.stack.currentWidget() is w.run_page
+    assert sorted(p.name for p in folder.iterdir()) == before
+
+    w.run()
+    {b.text(): b for b in w.result_page.findChildren(QPushButton)}["Rename 5 files"].click()
+    assert sorted(p.name for p in folder.iterdir())[0] == "Goa trip 001.jpg"
+    {b.text(): b for b in w.result_page.findChildren(QPushButton)}["Undo"].click()
+    assert sorted(p.name for p in folder.iterdir()) == before
+
+
+def test_files_field_shows_names_but_keeps_paths(qapp):
+    spec = AutomationSpec.model_validate(SPEC_ALL_TYPES)
+    widget = make_field(next(f for f in spec.inputs if f.key == "fs"))
+    widget.set_value(["/very/long/path/to/a.pdf", "/x/b.pdf"])
+    assert [widget.list.item(i).text() for i in range(2)] == ["a.pdf", "b.pdf"]
+    assert widget.value() == ["/very/long/path/to/a.pdf", "/x/b.pdf"]
+
+
+def test_guide_mode_for_renames_never_touches_the_samples(qapp, tmp_path):
+    from tests.conftest import AUTOMATIONS_DIR
+
+    samples = AUTOMATIONS_DIR / "bulk-rename" / "samples" / "Holiday photos"
+    before = sorted(p.name for p in samples.iterdir())
+    screens = render_guide(load_spec(AUTOMATIONS_DIR / "bulk-rename" / "spec.json"), tmp_path / "g")
+    assert [s["file"] for s in screens] == [
+        "01-fill-in.png",
+        "02-preview.png",
+        "03-result.png",
+        "04-undone.png",
+        "05-check-fields.png",
+    ]
+    assert sorted(p.name for p in samples.iterdir()) == before

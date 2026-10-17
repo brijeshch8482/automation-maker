@@ -169,7 +169,9 @@ def _check_arg_refs(
         arg_path = f"{path}.{name}"
 
         if isinstance(marker, Template):
-            yield from _check_template(value, scope, later_outs, step_index, arg_path)
+            yield from _check_template(
+                value, scope, later_outs, step_index, arg_path, marker.per_item
+            )
         elif marker.kind == "value":
             # @settings.* strings are checked by _check_settings_refs.
             if not NAMESPACED_REF.match(value) and not scope.has_value(value):
@@ -192,7 +194,12 @@ def _check_input_ref(value: str, marker: Ref, scope: _Scope, path: str) -> Itera
 
 
 def _check_template(
-    value: str, scope: _Scope, later_outs: dict[str, int], step_index: int, path: str
+    value: str,
+    scope: _Scope,
+    later_outs: dict[str, int],
+    step_index: int,
+    path: str,
+    per_item: tuple[str, ...] = (),
 ) -> Iterator[Issue]:
     try:
         parsed = list(string.Formatter().parse(value))
@@ -205,7 +212,7 @@ def _check_template(
         var = re.split(r"[.\[]", field_name, maxsplit=1)[0]
         if not var:
             yield Issue(path, f"empty placeholder in {value!r}")
-        elif not scope.has_value(var):
+        elif var not in per_item and not scope.has_value(var):
             yield _unresolved(var, later_outs, step_index, path, placeholder=True)
 
 

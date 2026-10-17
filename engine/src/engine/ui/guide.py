@@ -35,16 +35,19 @@ def render_guide(loaded: LoadedSpec, out_dir: Path) -> list[dict[str, Any]]:
     spec = loaded.spec
     screens: list[dict[str, Any]] = []
 
-    def shot(name: str, caption: str) -> None:
+    def shot(slug: str, caption: str) -> None:
+        name = f"{len(screens) + 1:02d}-{slug}.png"
         _grab(window, out_dir / name)
         screens.append({"file": name, "caption": caption})
 
     with tempfile.TemporaryDirectory(prefix="makemyexe-guide-") as tmp:
+        # Runs on copies of the sample files: a guide run must never rename the originals.
+        workspace = Path(tmp) / "Sample files"
         store = Store(spec.id, root=Path(tmp) / "data")
         window = MainWindow(
             loaded,
             store,
-            inputs=loaded.sample_inputs(),
+            inputs=loaded.sample_inputs(workspace),
             # Same folder name as the app's default (Documents\MakeMyEXE\<title>).
             output_dir=Path(tmp) / default_output_dir(spec.title).name,
             open_results=False,
@@ -53,21 +56,41 @@ def render_guide(loaded: LoadedSpec, out_dir: Path) -> list[dict[str, Any]]:
 
         if spec.settings:
             window.show_page(window.setup_page)
-            for key, value in loaded.sample_settings().items():
+            for key, value in loaded.sample_settings(workspace).items():
                 window.settings_form.widgets[key].set_value(value)
-            shot("01-setup.png", "The first time, enter your details. They are saved on this PC.")
+            if any(f.required for f in spec.settings):
+                caption = "The first time, enter your details. They are saved on this PC."
+            else:
+                caption = "Optional: under Settings, choose where results are saved."
+            shot("setup", caption)
             if not window._save_settings():
                 raise GuideError("sample_data does not fill the required settings")
 
-        shot("02-fill-in.png", "Fill in the form. Required fields are marked with *.")
+        shot("fill-in", "Fill in the form. Required fields are marked with *.")
         result = window.run()
         if result is None:
             raise GuideError(f"the sample run failed: {window.last_error!r}")
-        shot("03-result.png", "Press Run. Your result is saved as a new file; open it from here.")
-        if isinstance(result.last_value, SavedFile):
-            shutil.copy(
-                result.last_value.path, out_dir / f"sample-output{result.last_value.path.suffix}"
+
+        if result.pending:
+            shot(
+                "preview",
+                "Press Run to see the new names first. Nothing changes until you confirm.",
             )
+            batch = window.apply_changes()
+            if batch is None:
+                raise GuideError(f"applying the sample changes failed: {window.last_error!r}")
+            shot("result", "Done. Undo puts the old names back, even later.")
+            plan = result.pending[0]
+            if window.undo_changes(batch, plan.folder) is None:
+                raise GuideError(f"undoing the sample changes failed: {window.last_error!r}")
+            shot("undone", "After Undo, every file has its old name again.")
+        else:
+            shot("result", "Press Run. Your result is saved as a new file; open it from here.")
+            if isinstance(result.last_value, SavedFile):
+                shutil.copy(
+                    result.last_value.path,
+                    out_dir / f"sample-output{result.last_value.path.suffix}",
+                )
 
         required = next((f for f in spec.inputs if f.required), None)
         if required is not None:
@@ -75,7 +98,7 @@ def render_guide(loaded: LoadedSpec, out_dir: Path) -> list[dict[str, Any]]:
             window.inputs_form.widgets[required.key].set_value(None)
             window.run()
             shot(
-                "04-check-fields.png",
+                "check-fields",
                 "If something is missing, the field is highlighted. Nothing runs until it's fixed.",
             )
         window.close()

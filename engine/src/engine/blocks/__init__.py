@@ -16,6 +16,8 @@ IMPLEMENTATIONS: dict[str, BlockImpl] = {
     "pdf.render_template": pdf.render_template,
     "pdf.merge": pdf.merge,
     "file.save": files.save,
+    "files.scan": files.scan,
+    "files.rename": files.rename,
     "custom.step": custom.run,
 }
 

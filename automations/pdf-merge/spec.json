@@ -1,0 +1,32 @@
+{
+  "id": "pdf-merge",
+  "version": "1.0.0",
+  "title": "PDF Merge",
+  "description": "Combine several PDFs into one file, in the order you choose. Your original PDFs stay as they are.",
+  "category": "pdf",
+  "network": { "required": false, "domains": [] },
+  "settings": [
+    { "key": "output_folder", "type": "folder", "label": "Save merged PDFs to" }
+  ],
+  "inputs": [
+    {
+      "key": "pdfs",
+      "type": "files",
+      "label": "PDF files, in order",
+      "required": true,
+      "extensions": ["pdf"],
+      "min_count": 2,
+      "help": "The first file in the list comes first. Drag files to change the order."
+    },
+    { "key": "file_name", "type": "text", "label": "Name of the merged file", "required": true, "default": "Merged" }
+  ],
+  "steps": [
+    { "block": "pdf.merge", "args": { "files": "pdfs" }, "out": "merged" },
+    { "block": "file.save", "args": { "source": "merged", "folder": "@settings.output_folder", "name": "{file_name}.pdf" } }
+  ],
+  "output": { "type": "file", "open_after": true },
+  "sample_data": {
+    "pdfs": ["samples/Bill-March.pdf", "samples/Bill-April.pdf"],
+    "file_name": "Bills March-April"
+  }
+}

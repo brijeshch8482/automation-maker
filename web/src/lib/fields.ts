@@ -67,3 +67,10 @@ export const CATEGORY_LABELS: Record<AutomationSpec["category"], string> = {
   convert: "Convert",
   other: "Other",
 };
+
+/** Blocks that change the user's files (after a preview, with undo) instead of making new ones. */
+const FILE_CHANGING_BLOCKS = new Set(["files.rename"]);
+
+export function changesFiles(spec: AutomationSpec): boolean {
+  return spec.steps.some((step) => FILE_CHANGING_BLOCKS.has(step.block));
+}

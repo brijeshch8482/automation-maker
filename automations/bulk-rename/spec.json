@@ -1,0 +1,35 @@
+{
+  "id": "bulk-rename",
+  "version": "1.0.0",
+  "title": "Bulk Rename",
+  "description": "Give every file in a folder a clear, numbered name. You see the new names before anything changes, and one click undoes it.",
+  "category": "files",
+  "network": { "required": false, "domains": [] },
+  "settings": [],
+  "inputs": [
+    { "key": "folder", "type": "folder", "label": "Folder with the files", "required": true },
+    {
+      "key": "base_name",
+      "type": "text",
+      "label": "New name",
+      "required": true,
+      "default": "File",
+      "help": "Each file gets this name and a number, like \"Goa trip 001.jpg\". File types stay the same."
+    },
+    { "key": "start_number", "type": "number", "label": "Start numbering at", "default": 1, "min": 0 }
+  ],
+  "steps": [
+    { "block": "files.scan", "args": { "folder": "folder", "sort": "name" }, "out": "files" },
+    {
+      "block": "files.rename",
+      "args": { "files": "files", "name": "{base_name} {n}", "start": "start_number", "pad": 3 },
+      "out": "renamed"
+    }
+  ],
+  "output": { "type": "folder", "open_after": false },
+  "sample_data": {
+    "folder": "samples/Holiday photos",
+    "base_name": "Goa trip",
+    "start_number": 1
+  }
+}

@@ -1,0 +1,139 @@
+"""Download links: SigV4 presigning, the catalog manifest in R2, and links on ready jobs."""
+
+from datetime import UTC, datetime
+from urllib.parse import parse_qs, urlparse
+
+import httpx
+import pytest
+
+from api.storage import MANIFEST_KEY, Storage, presign_url
+
+pytestmark = pytest.mark.anyio
+
+NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
+MANIFEST = {
+    "automations": {
+        "make-pdf": {
+            "version": "1.0.0",
+            "exe": "MakePDF",
+            "zip": "catalog/make-pdf/1.0.0/MakePDF.zip",
+            "zip_bytes": 51_200_000,
+            "guide": "catalog/make-pdf/1.0.0/Guide.pdf",
+            "guide_bytes": 900_000,
+            "built_at": "2026-10-17T11:00:00Z",
+        }
+    }
+}
+
+
+def test_presign_matches_the_aws_example():
+    # docs.aws.amazon.com: "Authenticating Requests: Using Query Parameters", example GET.
+    url = presign_url(
+        host="examplebucket.s3.amazonaws.com",
+        path="/test.txt",
+        access_key="AKIAIOSFODNN7EXAMPLE",
+        secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        region="us-east-1",
+        expires=86400,
+        now=datetime(2013, 5, 24, tzinfo=UTC),
+    )
+    assert url.endswith(
+        "X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404"
+    )
+
+
+def make_storage(handler) -> tuple[Storage, list[httpx.Request]]:
+    seen: list[httpx.Request] = []
+
+    def record(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return handler(request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(record))
+    storage = Storage(
+        account_id="acct",
+        access_key_id="key-id",
+        secret_access_key="secret",
+        bucket="makemyexe-builds",
+        client=client,
+        clock=lambda: NOW,
+    )
+    return storage, seen
+
+
+def test_links_are_signed_r2_urls_that_save_under_a_name():
+    storage, _ = make_storage(lambda r: httpx.Response(200))
+    link = storage.link("catalog/make-pdf/1.0.0/MakePDF.zip", filename="MakePDF.zip")
+    url = urlparse(link.url)
+    query = parse_qs(url.query)
+    assert url.netloc == "acct.r2.cloudflarestorage.com"
+    assert url.path == "/makemyexe-builds/catalog/make-pdf/1.0.0/MakePDF.zip"
+    assert query["X-Amz-Expires"] == ["900"]
+    assert query["X-Amz-Credential"] == ["key-id/20261017/auto/s3/aws4_request"]
+    assert query["response-content-disposition"] == ['attachment; filename="MakePDF.zip"']
+    assert len(query["X-Amz-Signature"][0]) == 64
+    guide = storage.link("x/Guide.pdf", filename="Guide.pdf", inline=True)
+    assert "inline" in parse_qs(urlparse(guide.url).query)["response-content-disposition"][0]
+
+
+async def test_manifest_is_read_once_and_cached():
+    storage, seen = make_storage(lambda r: httpx.Response(200, json=MANIFEST))
+    assert (await storage.catalog_manifest())["make-pdf"]["exe"] == "MakePDF"
+    assert (await storage.catalog_manifest())["make-pdf"]["version"] == "1.0.0"
+    assert len(seen) == 1
+    assert seen[0].url.path == f"/makemyexe-builds/{MANIFEST_KEY}"
+    assert "X-Amz-Signature" in str(seen[0].url)
+
+
+async def test_manifest_missing_or_unreachable():
+    storage, _ = make_storage(lambda r: httpx.Response(404))
+    assert await storage.catalog_manifest() == {}
+
+    def boom(request):
+        raise httpx.ConnectError("down")
+
+    storage, _ = make_storage(boom)
+    assert await storage.catalog_manifest() == {}
+    storage, _ = make_storage(lambda r: httpx.Response(200, text="not json"))
+    assert await storage.catalog_manifest() == {}
+
+
+async def test_catalog_download_endpoint(ctx):
+    storage, _ = make_storage(lambda r: httpx.Response(200, json=MANIFEST))
+    ctx.app.state.storage = storage
+    r = await ctx.client.get("/automations/make-pdf/download")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["version"] == "1.0.0"
+    assert body["filename"] == "MakePDF.zip"
+    assert body["size_bytes"] == 51_200_000
+    assert body["expires_in"] == 900
+    assert "/catalog/make-pdf/1.0.0/MakePDF.zip?" in body["url"]
+    assert "/catalog/make-pdf/1.0.0/Guide.pdf?" in body["guide_url"]
+    # Published automations only; no login needed.
+    assert (await ctx.client.get("/automations/pdf-merge/download")).status_code == 503
+    assert (await ctx.client.get("/automations/nope/download")).status_code == 404
+
+
+async def test_ready_job_gets_download_links(ctx):
+    job_id = await ctx.create_job()
+    await ctx.to_building(job_id)
+    assert (await ctx.get_job(job_id))["download_url"] is None
+    r = await ctx.build_callback(
+        job_id=job_id,
+        attempt=0,
+        status="passed",
+        run_url="https://github.com/x/automation-builds/actions/runs/1",
+        artifact_key=f"jobs/{job_id}/attempt-0/InvoiceGenerator.zip",
+        guide_key=f"jobs/{job_id}/attempt-0/Guide.pdf",
+        report=None,
+    )
+    assert r.status_code == 204
+    assert (await ctx.get_job(job_id))["download_url"] is None  # no storage configured
+
+    storage, _ = make_storage(lambda r: httpx.Response(200))
+    ctx.app.state.storage = storage
+    job = await ctx.get_job(job_id)
+    assert f"/jobs/{job_id}/attempt-0/InvoiceGenerator.zip?" in job["download_url"]
+    assert "filename%3D%22InvoiceGenerator.zip%22" in job["download_url"]
+    assert f"/jobs/{job_id}/attempt-0/Guide.pdf?" in job["guide_url"]

@@ -24,6 +24,7 @@ from api.providers import GenerationProvider
 from api.providers.fake import FakeProvider
 from api.providers.routine import RoutineProvider
 from api.routes import catalog, internal, jobs
+from api.storage import Storage, make_storage
 
 log = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ def create_app(
     settings: Settings | None = None,
     provider: GenerationProvider | None = None,
     dispatcher: WorkflowDispatcher | None = None,
+    storage: Storage | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     check_production_settings(settings)
@@ -114,6 +116,7 @@ def create_app(
     app.state.settings = settings
     app.state.db = Database(settings.database_url)
     app.state.catalog = Catalog.load(settings.catalog_dir)
+    app.state.storage = storage if storage is not None else make_storage(settings)
     app.state.auth = TokenVerifier(settings)
     app.state.jobs = JobService(
         settings, provider or make_provider(settings), dispatcher or make_dispatcher(settings)

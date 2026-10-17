@@ -1,8 +1,9 @@
 # Source: automation-maker/builds-repo/.github/workflows/build.yml (synced; don't edit here).
 #
 # Started by FastAPI with workflow_dispatch on main (docs/ROUTINES.md §5), so this file always
-# comes from main. Job 1 runs generated code and has no secrets. Job 2 has the secrets and
-# never runs generated code: it only reads the artifact as data.
+# comes from main. Job 1 runs generated code and has no secrets and no cache. Job 2 has the
+# secrets, from the `publish` environment (deployment branches: main only), and never runs
+# generated code: it only reads the artifact as data.
 name: Build
 
 on:
@@ -61,10 +62,12 @@ jobs:
           git config --local --unset-all http.https://github.com/.extraheader || true
           git status --short
 
+      # No cache: generated code runs in this job, and a cache it poisoned would be restored
+      # into every later build. Nothing in this job may save a cache.
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
 
       - name: Install (engine and PyInstaller only)
         run: |
@@ -91,6 +94,7 @@ jobs:
     needs: build
     if: always()
     runs-on: ubuntu-latest
+    environment: publish
     timeout-minutes: 15
     permissions:
       contents: read

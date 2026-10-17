@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     builds_repo: str = "brijeshch8482/automation-builds"
     builds_workflow: str = "build.yml"
 
+    # Finished apps in Cloudflare R2 (api/storage.py). Use a READ-ONLY token here; uploads
+    # happen in GitHub Actions. All four empty: downloads say "not available yet".
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: SecretStr = SecretStr("")
+    r2_bucket: str = ""
+
     # Auth: Supabase access tokens, verified with the project's JWKS (RS256/ES256) at
     # {supabase_url}/auth/v1/.well-known/jwks.json. supabase_jwt_secret (HS256) is only for
     # legacy projects. dev_auth accepts "Bearer dev:<user-id>"; never in a deployment.

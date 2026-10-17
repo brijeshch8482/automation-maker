@@ -115,6 +115,38 @@ jobs:
             dist/report.json
           if-no-files-found: warn
 
+  # On main: put the tested apps from the package jobs into R2, then catalog/manifest.json, so
+  # the website's Download buttons serve them (build/publish_catalog.py). The only job with R2
+  # secrets; it runs none of the packaged code, it only uploads the files. The secrets live in
+  # the `catalog` environment (deployment branches: main only), never in repository secrets.
+  publish-catalog:
+    name: publish catalog
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, package]
+    runs-on: ubuntu-latest
+    environment: catalog
+    timeout-minutes: 15
+    concurrency:
+      group: publish-catalog
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: build
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: app-*
+          path: artifacts
+
+      - name: Upload apps and manifest to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python3 -m build.publish_catalog --artifacts artifacts --commit "$GITHUB_SHA"
+
   web:
     name: web
     runs-on: ubuntu-latest

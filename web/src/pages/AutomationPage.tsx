@@ -3,10 +3,11 @@ import { Link, useParams } from "react-router";
 
 import { getAutomation } from "../api";
 import { CategoryIcon } from "../components/AutomationCard";
-import { Check, Download, EyeOff, FileText, Shield, Undo, WifiOff, Windows } from "../components/icons";
+import DownloadCard from "../components/DownloadCard";
+import { EyeOff, Shield, Undo, WifiOff } from "../components/icons";
 import NetworkBadge from "../components/NetworkBadge";
 import SpecPreview from "../components/SpecPreview";
-import { buttonClass, usePageMeta } from "../components/ui";
+import { usePageMeta } from "../components/ui";
 import {
   CATEGORY_LABELS,
   changesFiles,
@@ -65,29 +66,8 @@ function AutomationDetails({ spec }: { spec: AutomationSpec }) {
           </div>
           {spec.description && <p className="mt-5 text-lg leading-8 text-slate-600">{spec.description}</p>}
 
-          <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-            <button
-              type="button"
-              disabled
-              className={buttonClass("primary", "lg", "w-full")}
-              aria-describedby="download-note"
-            >
-              <Download className="h-5 w-5" /> Download for Windows
-            </button>
-            <p id="download-note" className="mt-3 text-center text-sm text-slate-600">
-              Downloads open soon. The app and its guide are built and tested on Windows.
-            </p>
-            <ul className="mt-5 grid gap-2 border-t border-slate-200 pt-5 text-sm text-slate-600">
-              <li className="flex items-center gap-2">
-                <Windows className="h-4 w-4 text-slate-400" /> Windows 10 or 11, 64-bit
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-slate-400" /> No installation, no administrator rights
-              </li>
-              <li className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-slate-400" /> Guide.pdf with screenshots included
-              </li>
-            </ul>
+          <div className="mt-8">
+            <DownloadCard automationId={spec.id} />
           </div>
 
           {settings.length > 0 && <FieldSummary title="Set up once" fields={settings.map(fieldLabel)} />}

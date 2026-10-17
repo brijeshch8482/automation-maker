@@ -54,6 +54,15 @@ services:
         sync: false
       - key: BUILDS_WORKFLOW
         sync: false
+      # Downloads: a READ-ONLY R2 token (docs/DEPLOY.md §5).
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
 
       # --- Optional (leave blank for the defaults) ---
       - key: SUPABASE_JWT_SECRET # legacy HS256 projects only

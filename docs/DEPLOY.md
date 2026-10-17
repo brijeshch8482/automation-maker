@@ -137,12 +137,24 @@ Do the steps in this order; later steps need values from earlier ones.
 
 The Windows workflow lives in the `automation-builds` repo. Its `main` is a copy of `engine/ spec/ tools/ build/` made by the **Sync automation-builds** workflow; never edit it by hand. Secrets for this part go only into the GitHub settings pages named below.
 
-1. **Sync token.** GitHub › your avatar › Settings › Developer settings › Fine-grained tokens › Generate new token. Repository access: **only `automation-builds`**. Permissions: **Contents: Read and write** and **Workflows: Read and write** (the sync pushes `.github/workflows/build.yml`). Copy the token into **automation-maker** › Settings › Secrets and variables › Actions › New repository secret `BUILDS_SYNC_TOKEN`.
+> **GitHub secrets live in environments, never in repository secrets.** A repository secret reaches every workflow on every branch; an environment secret reaches only jobs that name the environment, and only from the branches you allow. Always **create the environment with its branch rule first, then add the secrets inside it**. Never skip ahead: a workflow job that names an environment that doesn't exist yet creates it on its own, with **no** branch rule, and anything you add there later is unprotected. If that ever happens, open the environment and set the rule before adding anything.
+>
+> To create one: repo › Settings › Environments › **New environment** › name it › *Deployment branches and tags* › **Selected branches and tags** › *Add deployment branch or tag rule* for each entry in the table › Save. Then, on the same page, *Environment secrets* › **Add environment secret** (and *Environment variables* for variables).
+>
+> | Repo | Environment | Allowed branches and tags | Holds |
+> |---|---|---|---|
+> | automation-maker | `sync` | branch `main`, tag `engine-v*` | `BUILDS_SYNC_TOKEN` (step 1) |
+> | automation-maker | `catalog` | branch `main` | `R2_*` upload token (section 6, step 2) |
+> | automation-builds | `publish` | branch `main` | `R2_*` upload token, `BUILD_CALLBACK_SECRET`, variable `API_BASE_URL` (step 6) |
+>
+> Settings › Secrets and variables › Actions › *Repository secrets* stays empty in both repos.
+
+1. **Sync token.** GitHub › your avatar › Settings › Developer settings › Fine-grained tokens › Generate new token. Repository access: **only `automation-builds`**. Permissions: **Contents: Read and write** and **Workflows: Read and write** (the sync pushes `.github/workflows/build.yml`). First create the **`sync` environment** in automation-maker (Settings › Environments › New environment `sync` › Selected branches and tags › add branch rule `main` and tag rule `engine-v*` › Save). Then add the token there as environment secret `BUILDS_SYNC_TOKEN`, not as a repository secret.
 2. **First sync.** automation-maker › Actions › *Sync automation-builds* › Run workflow (branch `main`). automation-builds `main` now has `engine/`, `spec/`, `tools/`, `build/`, `.github/workflows/build.yml` and `ENGINE_VERSION`. Later syncs run by themselves when you push a tag like `engine-v0.2.0`.
 3. **Protect `main`.** automation-builds › Settings › Rules › Rulesets › New branch ruleset for `main`: restrict updates and deletions, block force pushes. Only the sync token (you) may push it; the `am-build` routine only pushes `claude/job-*` branches.
 4. **Try a build before hosting exists.** In automation-builds create a branch `claude/job-test1` with a folder `jobs/test1/` that holds a copy of `automations/make-pdf/spec.json` and its `samples/` folder. Then Actions › *Build* › Run workflow with job id `test1`, branch `claude/job-test1`, attempt `0`. Without the settings below, the run only builds and checks: download `MakePDF.zip` and `Guide.pdf` from the run page (kept 7 days).
 5. **R2 (private file storage, 10 GB free).** Cloudflare › R2 › Create bucket `makemyexe-builds`; leave public access off. R2 › Manage API tokens › Create API token: **Object Read & Write**, applied to that bucket only. Note the Access Key ID, the Secret Access Key and your Account ID (on the R2 overview page).
-6. **Settings in automation-builds** › Settings › Secrets and variables › Actions:
+6. **Settings in automation-builds.** First create the **`publish` environment**: automation-builds › Settings › Environments › New environment `publish` › Selected branches and tags › add branch rule `main` › Save. Then add these on that environment's page (environment secrets and environment variables), never under repository secrets:
 
    | Name | Kind | Value |
    |---|---|---|
@@ -151,12 +163,22 @@ The Windows workflow lives in the `automation-builds` repo. Its `main` is a copy
    | `R2_BUCKET` | secret | `makemyexe-builds` |
    | `API_BASE_URL` | variable | `https://makemyexe-api.onrender.com` |
 
-   Set all of them or none: a half-configured publish step fails on purpose.
+   Set all of them or none: a half-configured publish step fails on purpose. The build job, where generated code runs, can't see any of them: only the publish job names the environment.
 7. **Let the API start builds.** GitHub › Fine-grained tokens › a second token, only `automation-builds`, **Actions: Read and write**. Put it into Render as `BUILDS_GITHUB_TOKEN`.
 
-## 6. Check the whole thing
+## 6. Downloads (Cloudflare R2)
 
-1. Open `https://makemyexe.pages.dev`. The catalog loads from the API (if the API is still waking up, the first load can take up to about 50 seconds).
+Finished apps live in a **private** R2 bucket. Nobody gets a public link to it: the API hands out signed links that work for 15 minutes. Two tokens keep the roles apart, and each secret goes only into the dashboard named here:
+
+1. **Bucket.** If you didn't make it in section 5: Cloudflare › R2 › Create bucket `makemyexe-builds`, public access **off**. R2 is free up to 10 GB of storage, and downloads from it cost nothing.
+2. **Upload token** (GitHub Actions only). R2 › Manage API tokens › Create API token `makemyexe-publish`: **Object Read & Write**, that bucket only. First create the **`catalog` environment** in automation-maker (Settings › Environments › New environment `catalog` › Selected branches and tags › add branch rule `main` › Save). Then add four environment secrets there, never as repository secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (`makemyexe-builds`). The same four values go into the automation-builds `publish` environment (section 5, step 6).
+3. **Read-only token** (the API only). Create a second token `makemyexe-api`: **Object Read only**, that bucket only. Put its values into **Render** › the API service › Environment: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. The API can then sign download links, but can never change or delete a file.
+4. **First release.** CI publishes the catalog on every push to `main` (job *publish catalog*, after the tests and the four Windows builds pass): `catalog/<id>/<version>/<App>.zip`, `Guide.pdf`, and last `catalog/manifest.json`. After adding the secrets to the `catalog` environment, open the latest CI run on `main` › **Re-run all jobs**, or merge the next PR.
+5. **Check.** Open the site › any automation. Within five minutes of a release the button shows the size and version, for example "51 MB · version 1.0.0". Click it: the zip downloads, and the page shows the three steps to start the app. A custom app that finished building shows the same buttons on its page.
+
+## 7. Check the whole thing
+
+1. Open `https://makemyexe.pages.dev`. The catalog shows at once (it ships with the site). On an automation page the Download button may say "Waking up our server" for up to a minute if the API was asleep.
 2. **Sign in, all three ways:**
    - **Create an account** with email + password › type the code from the confirmation email › you land on My apps.
    - Sign out (the round account button, top right) › **Email code** tab › type the code you receive.

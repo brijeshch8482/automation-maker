@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.catalog import Catalog
 from api.jobs import JobService
+from api.storage import Storage
 
 
 async def db_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -23,6 +24,11 @@ def catalog(request: Request) -> Catalog:
     return request.app.state.catalog
 
 
+def storage(request: Request) -> Storage | None:
+    return request.app.state.storage
+
+
 Session = Annotated[AsyncSession, Depends(db_session)]
 Jobs = Annotated[JobService, Depends(job_service)]
 CatalogDep = Annotated[Catalog, Depends(catalog)]
+StorageDep = Annotated[Storage | None, Depends(storage)]

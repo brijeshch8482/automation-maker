@@ -1,7 +1,8 @@
 # Copy the build snapshot (engine/ spec/ tools/ build/, uv workspace files, build.yml) to
 # automation-builds/main. Runs when an engine version is tagged (engine-v*) or by hand.
-# Needs the BUILDS_SYNC_TOKEN secret: a fine-grained token with Contents: write on
-# automation-builds only (docs/DEPLOY.md).
+# Needs the BUILDS_SYNC_TOKEN secret in the `sync` environment (deployment branches and tags:
+# main and engine-v*): a fine-grained token with Contents and Workflows: write on
+# automation-builds only (docs/DEPLOY.md §5). Never a repository secret.
 name: Sync automation-builds
 
 on:
@@ -18,6 +19,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    environment: sync
     timeout-minutes: 10
     env:
       BUILDS_REPO: ${{ vars.BUILDS_REPO || 'brijeshch8482/automation-builds' }}

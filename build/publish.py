@@ -8,7 +8,7 @@ the artifact (written by Job 1, where generated code ran) as untrusted data: nam
 text is cut to size, and "passed" needs both Job 1's result and report.json to agree.
 Standard library only: the job installs nothing.
 
-Settings (secrets/variables of automation-builds): API_BASE_URL, BUILD_CALLBACK_SECRET,
+Settings (from the automation-builds `publish` environment): API_BASE_URL, BUILD_CALLBACK_SECRET,
 R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. With none of them set the
 build is only checked and kept as a GitHub artifact (a test dispatch before hosting exists).
 """
@@ -93,11 +93,13 @@ def passed_files(artifact: Path, report: dict[str, Any]) -> tuple[Path, Path]:
     return archive, guide
 
 
-def upload(path: Path, key: str, env: dict[str, str]) -> None:
+def upload(path: Path, key: str, env: dict[str, str], content_type: str | None = None) -> None:
     """R2 speaks the S3 API; the aws CLI is preinstalled on GitHub's Ubuntu runners."""
     endpoint = f"https://{env['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
     command = ["aws", "s3", "cp", str(path), f"s3://{env['R2_BUCKET']}/{key}"]
     command += ["--endpoint-url", endpoint, "--only-show-errors"]
+    if content_type:
+        command += ["--content-type", content_type]
     aws_env = {
         **os.environ,
         "AWS_ACCESS_KEY_ID": env["R2_ACCESS_KEY_ID"],

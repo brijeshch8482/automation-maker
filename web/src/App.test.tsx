@@ -1,15 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
 
-import App from "./App";
+import { renderAt } from "./test/helpers";
 
-const renderAt = (path: string) =>
-  render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
-  );
+// Without VITE_API_URL: bundled catalog, no custom jobs.
 
 test("catalog links to the automation page", async () => {
   const user = userEvent.setup();
@@ -18,6 +12,7 @@ test("catalog links to the automation page", async () => {
   expect(await screen.findByRole("heading", { level: 1, name: "Invoice Generator" })).toBeTruthy();
   expect(screen.getByRole("figure", { name: /Preview of the Invoice Generator app/ })).toBeTruthy();
   expect(screen.getAllByText("Works offline").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
 });
 
 test("unknown automation shows not found", async () => {
@@ -35,4 +30,5 @@ test("custom page warns about PII and masks it", async () => {
   expect(box).toHaveProperty("value", "Send to [phone number] each month");
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.getByRole("button", { name: "Design my automation" })).toHaveProperty("disabled", true);
+  expect(screen.getByText("Custom builds open soon.")).toBeTruthy();
 });

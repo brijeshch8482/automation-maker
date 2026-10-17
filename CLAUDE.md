@@ -35,5 +35,6 @@ uv workspace (root `pyproject.toml`, members `spec/`, `engine/` and `api/`; `too
 - API (`api/`): `uv run uvicorn api.app:create_app --factory --reload` (settings from env or `.env`, see `.env.example`; defaults: SQLite, fake provider, no login). With `DEV_AUTH=true`, call it with `Authorization: Bearer dev:<user>`; play a routine by POSTing to `/internal/routine-callback` with the job's token (`api.security.callback_token`).
 - Web (`web/`, Node 22): `npm ci` · `npm run dev` · `npm test` · `npm run typecheck` · `npm run build`
 - TS types from the spec schema (after `spec.export_schema`): `npm run gen:types` in `web/` (`check:types` in CI)
-- Web screenshots: `npm run build && npm run screenshots` in `web/` → `docs/screenshots/web/` (uses `/opt/pw-browsers/chromium`, or set `CHROMIUM_PATH`)
+- Web against the local API: run the API (above) with `DEV_AUTH=true`, then in `web/` copy `.env.example` to `.env.local` and `npm run dev`.
+- Web screenshots: `npm run screenshots` in `web/` → `docs/screenshots/web/`. Builds the site itself, then starts the real API (fake provider, dev login) and walks the whole custom-job flow, playing the routine/build callbacks. Needs `uv` and Chromium (`/opt/pw-browsers/chromium`, or set `CHROMIUM_PATH`).
 - Add a block: define its args model and `BlockDef` in `spec/src/spec/catalog.py`, mark spec references with `ValueRef` / `InputRef(...)` / `ColumnRef(...)` / `TemplateStr`, then regenerate the schema.

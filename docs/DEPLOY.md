@@ -154,9 +154,19 @@ The Windows workflow lives in the `automation-builds` repo. Its `main` is a copy
    Set all of them or none: a half-configured publish step fails on purpose.
 7. **Let the API start builds.** GitHub › Fine-grained tokens › a second token, only `automation-builds`, **Actions: Read and write**. Put it into Render as `BUILDS_GITHUB_TOKEN`.
 
-## 6. Check the whole thing
+## 6. Downloads (Cloudflare R2)
 
-1. Open `https://makemyexe.pages.dev`. The catalog loads from the API (if the API is still waking up, the first load can take up to about 50 seconds).
+Finished apps live in a **private** R2 bucket. Nobody gets a public link to it: the API hands out signed links that work for 15 minutes. Two tokens keep the roles apart, and each secret goes only into the dashboard named here:
+
+1. **Bucket.** If you didn't make it in section 5: Cloudflare › R2 › Create bucket `makemyexe-builds`, public access **off**. R2 is free up to 10 GB of storage, and downloads from it cost nothing.
+2. **Upload token** (GitHub Actions only). R2 › Manage API tokens › Create API token `makemyexe-publish`: **Object Read & Write**, that bucket only. Put it into **automation-maker** › Settings › Secrets and variables › Actions as four secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (`makemyexe-builds`). The same four values go into automation-builds (section 5, step 6).
+3. **Read-only token** (the API only). Create a second token `makemyexe-api`: **Object Read only**, that bucket only. Put its values into **Render** › the API service › Environment: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. The API can then sign download links, but can never change or delete a file.
+4. **First release.** CI publishes the catalog on every push to `main` (job *publish catalog*, after the tests and the four Windows builds pass): `catalog/<id>/<version>/<App>.zip`, `Guide.pdf`, and last `catalog/manifest.json`. After adding the secrets, open the latest CI run on `main` › **Re-run all jobs**, or merge the next PR.
+5. **Check.** Open the site › any automation. Within five minutes of a release the button shows the size and version, for example "51 MB · version 1.0.0". Click it: the zip downloads, and the page shows the three steps to start the app. A custom app that finished building shows the same buttons on its page.
+
+## 7. Check the whole thing
+
+1. Open `https://makemyexe.pages.dev`. The catalog shows at once (it ships with the site). On an automation page the Download button may say "Waking up our server" for up to a minute if the API was asleep.
 2. **Sign in, all three ways:**
    - **Create an account** with email + password › type the code from the confirmation email › you land on My apps.
    - Sign out (the round account button, top right) › **Email code** tab › type the code you receive.

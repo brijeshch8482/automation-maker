@@ -8,6 +8,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.db import Job
+from api.states import JobState
+from api.storage import Storage
 
 
 class _In(BaseModel):
@@ -35,6 +37,16 @@ class AutomationSummary(BaseModel):
             version=spec["version"],
             network=spec.get("network") or {"required": False, "domains": []},
         )
+
+
+class DownloadOut(BaseModel):
+    version: str
+    filename: str
+    size_bytes: int | None
+    url: str
+    guide_url: str
+    expires_in: int
+    built_at: str | None = None
 
 
 # --- Jobs -------------------------------------------------------------------------------
@@ -81,15 +93,24 @@ class JobOut(BaseModel):
     attempt: int
     failure_reason: str | None
     run_url: str | None
-    # Download links arrive with R2 storage; until then a ready job has none.
+    # Short-lived links to the finished app, only when the job is ready and R2 is configured.
     download_url: str | None = None
+    guide_url: str | None = None
     created_at: datetime
     updated_at: datetime
     attempts: list[AttemptOut]
 
     @classmethod
-    def of(cls, job: Job) -> JobOut:
+    def of(cls, job: Job, storage: Storage | None = None) -> JobOut:
+        download_url = guide_url = None
+        if storage and job.state == JobState.READY and job.artifact_key:
+            filename = job.artifact_key.rsplit("/", 1)[-1]
+            download_url = storage.link(job.artifact_key, filename=filename).url
+            if job.guide_key:
+                guide_url = storage.link(job.guide_key, filename="Guide.pdf", inline=True).url
         return cls(
+            download_url=download_url,
+            guide_url=guide_url,
             id=job.id,
             state=job.state,
             description=job.description,

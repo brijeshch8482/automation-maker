@@ -15,7 +15,8 @@ import RequireLogin from "../components/RequireLogin";
 import SpecEditor from "../components/SpecEditor";
 import SpecPreview from "../components/SpecPreview";
 import StateBadge from "../components/StateBadge";
-import { Button, Card, ErrorText, Spinner, usePageMeta } from "../components/ui";
+import { AfterDownload } from "../components/DownloadCard";
+import { Button, buttonClass, Card, ErrorText, Spinner, usePageMeta } from "../components/ui";
 import { ATTEMPT_LABELS, ATTEMPT_STATUS_LABELS, formatDate } from "../lib/jobs";
 import { useJob } from "../lib/useJob";
 import type { AutomationSpec } from "../types/spec";
@@ -125,12 +126,7 @@ function StatusPanel({ job }: { job: Job }) {
           </p>
           <div className="mt-4">
             {job.download_url ? (
-              <a
-                href={job.download_url}
-                className="inline-block rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-              >
-                Download for Windows
-              </a>
+              <ReadyDownload job={job} />
             ) : (
               <>
                 <Button disabled>Download for Windows</Button>
@@ -169,6 +165,27 @@ function StatusPanel({ job }: { job: Job }) {
   }
 }
 
+function ReadyDownload({ job }: { job: Job }) {
+  const [started, setStarted] = useState(false);
+  const filename = new URL(job.download_url!).pathname.split("/").pop() ?? "app.zip";
+  return (
+    <>
+      <div className="flex flex-wrap gap-3">
+        <a href={job.download_url!} onClick={() => setStarted(true)} className={buttonClass("primary")}>
+          Download for Windows
+        </a>
+        {job.guide_url && (
+          <a href={job.guide_url} target="_blank" rel="noreferrer" className={buttonClass("secondary")}>
+            Read the guide (PDF)
+          </a>
+        )}
+      </div>
+      {started && <AfterDownload filename={decodeURIComponent(filename)} guideUrl={job.guide_url} />}
+      <p className="mt-3 text-xs text-slate-500">Links stay valid for 15 minutes. Reload the page for fresh ones.</p>
+    </>
+  );
+}
+
 function Working({ title, text }: { title: string; text: string }) {
   return (
     <Card>
@@ -180,16 +197,19 @@ function Working({ title, text }: { title: string; text: string }) {
 
 // --- Spec review --------------------------------------------------------------------------
 
-function SpecReview({ job, spec, onJob }: { job: Job; spec: AutomationSpec; onJob: (job: Job) => void }) {
+/** Exported for tests. */
+export function SpecReview({ job, spec, onJob }: { job: Job; spec: AutomationSpec; onJob: (job: Job) => void }) {
   const [draft, setDraft] = useState(spec);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [issues, setIssues] = useState<string[]>([]);
 
-  // A new revision from the server replaces local edits.
-  useEffect(() => setDraft(spec), [spec]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(spec);
+  // A new design from the server replaces local edits. Polling returns a fresh object every few
+  // seconds, so compare content: an unchanged spec must not wipe what the user is typing.
+  const specJson = JSON.stringify(spec);
+  useEffect(() => setDraft(JSON.parse(specJson) as AutomationSpec), [specJson]);
+  const dirty = JSON.stringify(draft) !== specJson;
 
   const save = async () => {
     setSaving(true);

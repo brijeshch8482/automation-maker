@@ -28,10 +28,10 @@ async def test_get_automation(ctx):
     assert (await ctx.client.get("/automations/nope")).status_code == 404
 
 
-async def test_download_not_available_yet(ctx):
-    r = await ctx.client.post("/automations/invoice-generator/download")
+async def test_download_not_available_without_storage(ctx):
+    r = await ctx.client.get("/automations/invoice-generator/download")
     assert r.status_code == 503
-    assert (await ctx.client.post("/automations/nope/download")).status_code == 404
+    assert (await ctx.client.get("/automations/nope/download")).status_code == 404
 
 
 async def test_health(ctx):

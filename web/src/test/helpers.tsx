@@ -76,6 +76,7 @@ export function makeJob(overrides: Partial<Job> = {}): Job {
     failure_reason: null,
     run_url: null,
     download_url: null,
+    guide_url: null,
     created_at: "2026-10-17T09:00:00Z",
     updated_at: "2026-10-17T09:05:00Z",
     attempts: [

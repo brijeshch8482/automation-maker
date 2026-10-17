@@ -1,7 +1,8 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { invoiceSpec, makeJob, mockFetch, renderAt, useApi } from "../test/helpers";
+import { SpecReview } from "./JobPage";
 
 describe("with the API", () => {
   test("the catalog renders without calling the API", async () => {
@@ -78,9 +79,9 @@ describe("with the API", () => {
     expect(screen.getByLabelText("Do you need a discount column?")).toBeTruthy();
     const build = screen.getByRole("button", { name: "Build my app" });
 
-    const label = screen.getByLabelText("Label for Phone");
-    await user.clear(label);
-    await user.type(label, "Mobile");
+    const label = screen.getByLabelText("Label for Phone") as HTMLInputElement;
+    // Type over the selected old text in one step (clear-then-type can race on a busy runner).
+    await user.type(label, "Mobile", { initialSelectionStart: 0, initialSelectionEnd: label.value.length });
     expect(build).toHaveProperty("disabled", true); // unsaved changes
     const preview = screen.getByRole("figure");
     expect(within(preview).getByLabelText("Mobile")).toBeTruthy(); // live preview
@@ -207,3 +208,22 @@ describe("with the API", () => {
   });
 });
 
+
+test("a fresh copy of the same design keeps edits in progress; a new design replaces them", async () => {
+  const user = userEvent.setup();
+  const job = makeJob();
+  const spec = job.spec!;
+  const { rerender } = render(<SpecReview job={job} spec={spec} onJob={() => {}} />);
+  const label = screen.getByLabelText("Label for Phone") as HTMLInputElement;
+  await user.type(label, "Mobile", { initialSelectionStart: 0, initialSelectionEnd: label.value.length });
+
+  // What a reload returns: equal content, new object.
+  rerender(<SpecReview job={job} spec={structuredClone(spec)} onJob={() => {}} />);
+  expect(screen.getByLabelText("Label for Mobile")).toHaveProperty("value", "Mobile");
+  expect(screen.getByRole("button", { name: "Save changes" })).toHaveProperty("disabled", false);
+
+  const revised = { ...structuredClone(spec), title: "Invoice Maker" };
+  rerender(<SpecReview job={job} spec={revised} onJob={() => {}} />);
+  expect(screen.getByLabelText("Label for Phone")).toHaveProperty("value", "Phone");
+  expect(screen.getByLabelText("App name")).toHaveProperty("value", "Invoice Maker");
+});

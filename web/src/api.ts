@@ -46,6 +46,7 @@ export interface Job {
   failure_reason: string | null;
   run_url: string | null;
   download_url: string | null;
+  guide_url: string | null;
   created_at: string;
   updated_at: string;
   attempts: JobAttempt[];
@@ -138,6 +139,30 @@ export async function listAutomations(): Promise<AutomationSummary[]> {
 
 export async function getAutomation(id: string): Promise<AutomationSpec | null> {
   return BUNDLED.find((spec) => spec.id === id) ?? null;
+}
+
+// --- Downloads ---------------------------------------------------------------------------
+
+/** Short-lived links to the latest published build of a ready-made automation. */
+export interface DownloadInfo {
+  version: string;
+  filename: string;
+  size_bytes: number | null;
+  url: string;
+  guide_url: string;
+  expires_in: number;
+  built_at: string | null;
+}
+
+/** Null when downloads aren't published yet (or the site runs without the API). */
+export async function getDownload(id: string): Promise<DownloadInfo | null> {
+  if (!apiUrl()) return null;
+  try {
+    return await request<DownloadInfo>(`/automations/${encodeURIComponent(id)}/download`);
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 503 || err.status === 404)) return null;
+    throw err;
+  }
 }
 
 // --- Jobs -----------------------------------------------------------------------------

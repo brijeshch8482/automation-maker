@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from api.auth import CurrentUser
 from api.db import Job
 from api.jobs import JobConflict, JobNotFound, SpecInvalid
-from api.routes.deps import Jobs, Session
+from api.routes.deps import Jobs, Session, StorageDep
 from api.schemas import AnswersIn, CreateJob, JobCreated, JobOut, JobSummary, SpecIn
 
 router = APIRouter(tags=["jobs"])
@@ -31,8 +31,10 @@ async def create_job(
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(job_id: str, user: CurrentUser, jobs: Jobs, session: Session) -> JobOut:
-    return JobOut.of(await _load(jobs, session, job_id, user))
+async def get_job(
+    job_id: str, user: CurrentUser, jobs: Jobs, session: Session, storage: StorageDep
+) -> JobOut:
+    return JobOut.of(await _load(jobs, session, job_id, user), storage)
 
 
 @router.post("/jobs/{job_id}/answers", status_code=status.HTTP_202_ACCEPTED)

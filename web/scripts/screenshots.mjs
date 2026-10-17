@@ -299,7 +299,29 @@ async function fakeSupabase(page) {
           : {};
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.route(`${API}/**`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  const r2 = "https://acct.r2.cloudflarestorage.com/makemyexe-builds/catalog/make-pdf/1.0.0";
+  await page.route(`${API}/**`, (route) => {
+    const body = route.request().url().endsWith("/automations/make-pdf/download")
+      ? {
+          version: "1.0.0",
+          filename: "MakePDF.zip",
+          size_bytes: 51_200_000,
+          url: `${r2}/MakePDF.zip?X-Amz-Signature=demo`,
+          guide_url: `${r2}/Guide.pdf?X-Amz-Signature=demo`,
+          expires_in: 900,
+          built_at: "2026-10-17T11:00:00Z",
+        }
+      : [];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  // The "download": R2 answers with an attachment, so the page stays where it is.
+  await page.route("https://acct.r2.cloudflarestorage.com/**", (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "application/zip", "Content-Disposition": 'attachment; filename="MakePDF.zip"' },
+      body: "PK",
+    }),
+  );
 }
 
 async function authShots(browser) {
@@ -350,6 +372,13 @@ async function authShots(browser) {
           await page.getByRole("button", { name: "Account" }).click();
           await shot(page, "auth-account-menu", device);
         }
+
+        await page.goto(`${SITE}/automations/make-pdf`, { waitUntil: "networkidle" });
+        await page.getByText("51 MB · version 1.0.0").waitFor();
+        await shot(page, "download-ready", device);
+        await page.getByRole("button", { name: "Download for Windows" }).click();
+        await page.getByText("Your download has started").waitFor();
+        await shot(page, "download-started", device);
         await page.close();
       }
     } finally {

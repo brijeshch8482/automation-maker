@@ -32,4 +32,7 @@ uv workspace (root `pyproject.toml`, members `spec/` and `engine/`; `tools/` is 
 - Tests: `QT_QPA_PLATFORM=offscreen uv run pytest`
 - Validate a spec: `uv run python -m tools.validate_spec <file> [<file> ...]` (exit 1 on any issue)
 - Regenerate JSON Schema + block catalog after changing `spec/`: `uv run python -m spec.export_schema` (writes `spec/schema/`; `--check` fails if stale, CI runs it)
+- Web (`web/`, Node 22): `npm ci` · `npm run dev` · `npm test` · `npm run typecheck` · `npm run build`
+- TS types from the spec schema (after `spec.export_schema`): `npm run gen:types` in `web/` (`check:types` in CI)
+- Web screenshots: `npm run build && npm run screenshots` in `web/` → `docs/screenshots/web/` (uses `/opt/pw-browsers/chromium`, or set `CHROMIUM_PATH`)
 - Add a block: define its args model and `BlockDef` in `spec/src/spec/catalog.py`, mark spec references with `ValueRef` / `InputRef(...)` / `ColumnRef(...)` / `TemplateStr`, then regenerate the schema.

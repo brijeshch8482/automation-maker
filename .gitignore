@@ -26,3 +26,6 @@ web/dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# Local databases
+*.db

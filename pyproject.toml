@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "makemyexe-spec",
     "makemyexe-engine",
+    "makemyexe-api",
 ]
 
 [dependency-groups]
@@ -19,15 +20,17 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["spec", "engine"]
+members = ["spec", "engine", "api"]
 
 [tool.uv.sources]
 makemyexe-spec = { workspace = true }
 makemyexe-engine = { workspace = true }
+makemyexe-api = { workspace = true }
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+src = [".", "spec/src", "engine/src", "api/src"]
 # Docs hold illustrative snippets; don't let `ruff format` rewrite them.
 extend-exclude = ["*.md"]
 

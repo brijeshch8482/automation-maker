@@ -28,6 +28,10 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
+      - name: Qt system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3 fonts-dejavu-core fonts-lohit-deva
+
       - name: Install
         run: uv sync --locked
 
@@ -46,6 +50,31 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+      - name: Smoke test every catalog automation
+        shell: bash
+        run: |
+          for spec in automations/*/spec.json; do
+            uv run python -m engine "$spec" --smoke-test
+          done
+
+      # Windows rendering is checked on every PR: the guide screenshots come from this job.
+      - name: Render guide screenshots (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          for spec in automations/*/spec.json; do
+            id=$(basename "$(dirname "$spec")")
+            uv run python -m engine "$spec" --guide-mode "screenshots-windows/$id"
+          done
+
+      - name: Upload Windows screenshots
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: screenshots-windows/
+          if-no-files-found: error
 
   web:
     name: web

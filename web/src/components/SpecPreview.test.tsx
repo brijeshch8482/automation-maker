@@ -26,9 +26,10 @@ describe("SpecPreview with the invoice sample_data", () => {
     render(<SpecPreview spec={spec} />);
     const items = screen.getByRole("group", { name: "Items" });
     await user.click(within(items).getByRole("button", { name: "+ Add row" }));
-    expect(within(items).getAllByRole("row")).toHaveLength(3); // header + 2 rows
-    await user.click(within(items).getByRole("button", { name: "Remove row 1" }));
-    await user.click(within(items).getByRole("button", { name: "Remove row 1" }));
+    expect(within(items).getAllByRole("row")).toHaveLength(4); // header + 2 sample rows + 1 new
+    for (let i = 0; i < 3; i++) {
+      await user.click(within(items).getByRole("button", { name: "Remove row 1" }));
+    }
     expect(within(items).getByText("No rows yet")).toBeTruthy();
   });
 

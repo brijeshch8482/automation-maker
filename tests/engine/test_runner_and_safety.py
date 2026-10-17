@@ -1,5 +1,8 @@
 import json
+import os
 import socket
+import subprocess
+import sys
 
 import pytest
 from pypdf import PdfReader
@@ -118,8 +121,62 @@ def test_cli_smoke_test(capsys, restore_network):
 def test_cli_bad_spec(tmp_path, capsys, restore_network):
     bad = tmp_path / "spec.json"
     bad.write_text("{}")
-    assert cli.main([str(bad), "--smoke-test"]) == 2
+    report = tmp_path / "report.json"
+    assert cli.main([str(bad), "--smoke-test", "--report", str(report)]) == 2
     assert "not valid" in capsys.readouterr().err
+    assert json.loads(report.read_text())["status"] == "failed"
+
+
+def test_cli_writes_the_report_file(tmp_path, restore_network):
+    # A windowed EXE has no console: the build reads this file instead of stdout.
+    report = tmp_path / "out" / "report.json"
+    assert cli.main([str(INVOICE_SPEC), "--smoke-test", "--report", str(report)]) == 0
+    assert json.loads(report.read_text())["output"]["file"] == "INV-1.pdf"
+
+
+def test_cli_launch_check_opens_and_closes_the_window(tmp_path):
+    # Its own process: the check makes the QApplication, as the packaged EXE does.
+    report = tmp_path / "launch.json"
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "MAKEMYEXE_DATA_DIR": str(tmp_path)}
+    spec = AUTOMATIONS_DIR / "make-pdf" / "spec.json"
+    args = [sys.executable, "-m", "engine", str(spec), "--launch-check", "--report", str(report)]
+    result = subprocess.run(args, env=env, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(report.read_text()) == {
+        "status": "passed",
+        "visible": True,
+        "platform": "offscreen",
+    }
+    assert list(tmp_path.iterdir()) == [report]  # settings went to a temp folder, not here
+
+
+def test_bundled_spec_is_found_in_a_packaged_app(tmp_path, monkeypatch):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "spec.json").write_text("{}")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert cli._default_spec() == tmp_path / "app" / "spec.json"
+    (tmp_path / "app" / "spec.json").unlink()
+    assert cli._default_spec().name == "spec.json"  # older layout: next to the EXE
+
+
+def test_blocks_load_lazily_and_every_catalog_block_has_one():
+    from engine.blocks import IMPLEMENTATIONS, block_module, get_block_impl
+    from spec.catalog import BLOCKS
+
+    assert set(IMPLEMENTATIONS) == set(BLOCKS)
+    for name in BLOCKS:
+        assert callable(get_block_impl(name)), name
+    assert block_module("pdf.from_files") == "engine.blocks.makepdf"
+    assert get_block_impl("nope") is None
+    # Lazy loading only helps if the heavy modules aren't imported by the core.
+    code = (
+        "import sys, engine.runner, engine.ui.window; "
+        "print(sorted(m for m in ('fpdf', 'pillow_heif', 'engine.blocks.makepdf') "
+        "if m in sys.modules))"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "[]"
 
 
 def test_step_errors_keep_engine_messages():

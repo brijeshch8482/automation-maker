@@ -22,15 +22,28 @@ Do the steps in this order; later steps need values from earlier ones.
    - Name: `makemyexe`.
    - **Region: South Asia (Mumbai)** (`ap-south-1`). It's closest to users, and Render's Singapore region is the nearest to it.
    - Database password: let Supabase generate a strong one and save it in your password manager. You need it once, in step 3.
-2. **Login settings.** Authentication › Sign In / Providers: keep **Email** enabled. We use the magic link, so no password is needed.
+2. **Login settings.** People can sign in three ways: **email + password**, a **6-digit code by email**, or **Google**. All three end in the same Supabase login, so the API needs nothing extra.
+   - Authentication › **Sign In / Providers › Email**: enabled, **Confirm email** on, **Minimum password length** `8`.
    - Authentication › **URL Configuration**:
-     - **Site URL:** `https://makemyexe.pages.dev`
+     - **Site URL:** your Pages URL, e.g. `https://makemyexe.pages.dev`
      - **Redirect URLs** (add each one):
-       - `https://makemyexe.pages.dev`
-       - `https://*.makemyexe.pages.dev` (Cloudflare preview deployments)
-       - `http://localhost:5173` (local development)
+       - `https://makemyexe.pages.dev/**`
+       - `https://*.makemyexe.pages.dev/**` (Cloudflare preview deployments)
+       - `http://localhost:5173/**` (local development)
 
-   The website asks Supabase to send people back to the site root after they click the email link, so the root URLs above must be listed or the link is refused.
+     Google and the links in emails send people back to the site (to `/login` and the site root), so the site must be listed or Supabase refuses the redirect.
+   - Authentication › **Emails › Templates**: put the code into three templates so people can type it instead of clicking (the link keeps working too). Keep the subject lines; replace the body's main line:
+     - **Magic Link** (sign-in code): `Your MakeMyEXE sign-in code is <strong>{{ .Token }}</strong>. It expires in 1 hour. Or <a href="{{ .ConfirmationURL }}">sign in with this link</a>.`
+     - **Confirm signup**: `Your MakeMyEXE confirmation code is <strong>{{ .Token }}</strong>. Or <a href="{{ .ConfirmationURL }}">confirm with this link</a>.`
+     - **Reset Password**: `Your MakeMyEXE password reset code is <strong>{{ .Token }}</strong>. Or <a href="{{ .ConfirmationURL }}">reset it with this link</a>.`
+
+     The site asks for a 6-digit code. If Authentication › Sign In / Providers › Email shows an **Email OTP Length**, keep it at `6`.
+   - **Email delivery.** Supabase's built-in mailer sends only a few emails per hour and is meant for testing. Before real users arrive, set Authentication › **Emails › SMTP Settings** to a mail service (Resend, Brevo and Amazon SES have free tiers) with a sender like `MakeMyEXE <no-reply@your-domain>`. The SMTP password goes only into that Supabase field.
+   - **Google.** The "Continue with Google" button appears on the site by itself as soon as Google is switched on in Supabase.
+     1. [console.cloud.google.com](https://console.cloud.google.com) › create a project `MakeMyEXE`.
+     2. **Google Auth Platform › Branding** (OAuth consent screen): app name `MakeMyEXE`, your support email, logo (`web/public/apple-touch-icon.png`), app home page = your site, privacy policy = `<site>/privacy`, terms = `<site>/terms`, authorised domain `supabase.co` plus your site's domain. Audience: **External**, then **Publish app** so anyone can sign in.
+     3. **Clients › Create client** › Web application, name `MakeMyEXE web`. **Authorised JavaScript origins:** your site URL. **Authorised redirect URIs:** `https://<ref>.supabase.co/auth/v1/callback` (Supabase shows this exact URL on its Google provider page).
+     4. Copy the **Client ID** and **Client secret** into Supabase › Authentication › Sign In / Providers › **Google**, and enable it. The secret goes only into that Supabase field.
 3. **Connection string for the API.** Click **Connect** (top of the project page) › **Session pooler** › copy the URI. It looks like:
    ```
    postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
@@ -144,7 +157,11 @@ The Windows workflow lives in the `automation-builds` repo. Its `main` is a copy
 ## 6. Check the whole thing
 
 1. Open `https://makemyexe.pages.dev`. The catalog loads from the API (if the API is still waking up, the first load can take up to about 50 seconds).
-2. **Sign in:** Make a custom one › Sign in to continue › enter your email › click the link in the email. You land back on the site, signed in.
+2. **Sign in, all three ways:**
+   - **Create an account** with email + password › type the code from the confirmation email › you land on My apps.
+   - Sign out (the round account button, top right) › **Email code** tab › type the code you receive.
+   - Sign out › **Continue with Google** › pick your account › you come back to the site, signed in.
+   - **Forgot password?** › code › new password.
 3. **Submit a description.** With `PROVIDER=fake` no routine runs, so the job stays in "Designing" until the watchdog fails it after 15 minutes. That's expected until the routines are set up ([ROUTINES.md](ROUTINES.md)); then set `PROVIDER=routine` and fill in the `ROUTINE_*` variables.
 4. **Rotating a secret:** change it in the dashboard and redeploy. For `BUILD_CALLBACK_SECRET`, update automation-builds at the same time.
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { useAuth } from "../auth";
@@ -24,7 +24,7 @@ const NAV = [
 ];
 
 export default function Layout() {
-  const { mode, session } = useAuth();
+  const { mode, session, signOut } = useAuth();
   const { pathname, hash } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -60,10 +60,14 @@ export default function Layout() {
             ))}
           </nav>
           <div className="hidden items-center gap-2 md:flex">
-            {account && (
-              <NavLink to={account.to} className={navClass}>
-                {account.label}
-              </NavLink>
+            {session ? (
+              <AccountMenu label={session.label} onSignOut={() => void signOut()} />
+            ) : (
+              account && (
+                <NavLink to={account.to} className={navClass}>
+                  {account.label}
+                </NavLink>
+              )
             )}
             <ButtonLink to="/automations">Browse automations</ButtonLink>
           </div>
@@ -84,6 +88,11 @@ export default function Layout() {
               {[...NAV, ...(account ? [account] : [])].map((item) => (
                 <NavItem key={item.to} {...item} className={mobileNavClass} />
               ))}
+              {session && (
+                <button type="button" className={`${mobileNavClass({ isActive: false })} w-full text-left`} onClick={() => void signOut()}>
+                  Sign out <span className="text-sm font-normal text-slate-500">({session.label})</span>
+                </button>
+              )}
               <ButtonLink to="/automations" className="mt-2 w-full">
                 Browse automations
               </ButtonLink>
@@ -97,6 +106,67 @@ export default function Layout() {
       </main>
 
       <Footer />
+    </div>
+  );
+}
+
+function AccountMenu({ label, onSignOut }: { label: string; onSignOut: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { pathname } = useLocation();
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account"
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-bold uppercase text-brand-700 ring-1 ring-brand-200 hover:bg-brand-200"
+      >
+        {label.trim().charAt(0) || "?"}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          <p className="truncate border-b border-slate-100 px-4 py-3 text-sm text-slate-600">
+            Signed in as
+            <span className="block truncate font-semibold text-slate-900">{label}</span>
+          </p>
+          <Link role="menuitem" to="/me/jobs" className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+            My apps
+          </Link>
+          <Link role="menuitem" to="/custom" className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+            New custom app
+          </Link>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={onSignOut}
+            className="block w-full border-t border-slate-100 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }

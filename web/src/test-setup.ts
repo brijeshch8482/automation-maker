@@ -1,6 +1,8 @@
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+import { resetAuthForTests } from "./auth";
+
 // findBy*/waitFor give up after 1s by default; a cold, busy CI runner can need longer.
 configure({ asyncUtilTimeout: 3000 });
 
@@ -9,6 +11,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   localStorage.clear();
+  sessionStorage.clear();
+  resetAuthForTests();
 });
 
 // jsdom has no scrolling; the layout scrolls to the top on every page change.

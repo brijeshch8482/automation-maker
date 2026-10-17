@@ -1,5 +1,4 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 
 import { invoiceSpec, makeJob, mockFetch, renderAt, useApi } from "../test/helpers";
@@ -28,7 +27,7 @@ describe("with the API", () => {
     await user.type(screen.getByLabelText("Dev user name"), "alice");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText(/No custom automations yet/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "My apps" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Account" }).textContent).toBe("a"); // header menu
   });
 
   test("submitting a description creates a job and opens it", async () => {
@@ -208,39 +207,3 @@ describe("with the API", () => {
   });
 });
 
-test("with Supabase configured, sign-in asks for an email", async () => {
-  vi.stubEnv("VITE_API_URL", "http://api.test");
-  vi.stubEnv("VITE_SUPABASE_URL", "https://project.supabase.test");
-  vi.stubEnv("VITE_SUPABASE_ANON_KEY", "anon-key");
-  renderAt("/login");
-  expect(await screen.findByLabelText("Email")).toHaveProperty("type", "email");
-  expect(screen.getByRole("button", { name: "Email me a sign-in link" })).toBeTruthy();
-  expect(screen.queryByText(/Development login/)).toBeNull();
-});
-
-test("Supabase sign-in sends the publishable key as apikey and redirects to the site root", async () => {
-  vi.stubEnv("VITE_API_URL", "http://api.test");
-  vi.stubEnv("VITE_SUPABASE_URL", "https://project.supabase.test");
-  vi.stubEnv("VITE_SUPABASE_ANON_KEY", "sb_publishable_test123");
-  const requests: { url: string; headers: Headers }[] = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      requests.push({ url, headers: new Headers(init.headers) });
-      return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
-    }),
-  );
-  const user = userEvent.setup();
-  renderAt("/login");
-  await user.type(await screen.findByLabelText("Email"), "someone@example.com");
-  await user.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
-  expect(await screen.findByText(/we sent a sign-in link/)).toBeTruthy();
-
-  const otp = requests.find((r) => r.url.includes("/auth/v1/otp"));
-  expect(otp).toBeTruthy();
-  // supabase-js handles new-format keys itself (it keeps them out of Authorization only for
-  // Edge Functions, by design); what we rely on is the apikey header.
-  expect(otp!.headers.get("apikey")).toBe("sb_publishable_test123");
-  expect(new URL(otp!.url).searchParams.get("redirect_to")).toBe(window.location.origin);
-});

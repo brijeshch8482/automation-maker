@@ -65,7 +65,11 @@ export function PrivacyPage() {
         <h2>Custom apps</h2>
         <p>To build a custom app for you, we keep:</p>
         <ul>
-          <li>Your account: your email address, used only to sign you in.</li>
+          <li>
+            Your account: your email address, used only to sign you in. If you set a password, it
+            is stored by Supabase as a one-way hash that nobody can read back. If you continue with
+            Google, Google tells us your email address and name, nothing else.
+          </li>
           <li>
             Your description of the task. Before it is saved, personal details (phone numbers,
             email addresses, card and bank numbers, Aadhaar, PAN and GSTIN) are masked, first in your browser and again on

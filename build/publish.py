@@ -8,7 +8,7 @@ the artifact (written by Job 1, where generated code ran) as untrusted data: nam
 text is cut to size, and "passed" needs both Job 1's result and report.json to agree.
 Standard library only: the job installs nothing.
 
-Settings (secrets/variables of automation-builds): API_BASE_URL, BUILD_CALLBACK_SECRET,
+Settings (from the automation-builds `publish` environment): API_BASE_URL, BUILD_CALLBACK_SECRET,
 R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. With none of them set the
 build is only checked and kept as a GitHub artifact (a test dispatch before hosting exists).
 """

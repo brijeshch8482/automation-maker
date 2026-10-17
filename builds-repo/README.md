@@ -6,7 +6,7 @@ Build sandbox for MakeMyEXE custom jobs. Do not develop here: everything on `mai
 - `claude/job-<id>` branches are written by the `am-build` routine and contain only `jobs/<id>/`.
 - `build.yml` is started by the API with `workflow_dispatch` on `main`. Job 1 (`windows-latest`, no secrets) takes only `jobs/<id>/` from the job branch, packages it with `python -m build.package`, runs the smoke test, a launch check and the guide, and uploads the zip, `Guide.pdf` and `report.json`. Job 2 (no generated code) uploads a passing build to R2 and sends the signed callback.
 
-Settings (Settings › Secrets and variables › Actions), all from `docs/DEPLOY.md` in `automation-maker`:
+Settings live in the **`publish` environment** (Settings › Environments; deployment branches: `main` only), never in repository secrets. Steps in `docs/DEPLOY.md` §5 in `automation-maker`:
 
 | Name | Kind |
 |---|---|
@@ -14,4 +14,4 @@ Settings (Settings › Secrets and variables › Actions), all from `docs/DEPLOY
 | `BUILD_CALLBACK_SECRET` | secret, the same value as in the API |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | secrets |
 
-Until they are set, a build only checks the job and keeps the result as a GitHub artifact.
+Until they are set, a build only checks the job and keeps the result as a GitHub artifact. The build job (generated code) uses no cache and gets no secrets.

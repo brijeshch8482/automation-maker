@@ -9,6 +9,7 @@ Web product where users pick a ready-made automation or describe a custom one, a
 - **No telemetry or auto-update calls in the EXE.**
 - **AutomationSpec is the source of truth** (`spec/`). Change the models there first, then regenerate JSON Schema and TS types.
 - **Generated code never runs in a CI job that has secrets.** The Windows workflow is dispatched on `main` and copies only `jobs/<id>/` from job branches.
+- **Secrets only in GitHub environments limited to `main`** (`catalog`, `sync`, and `publish` in automation-builds), never repository secrets; the job that runs generated code gets no secrets and no cache (`tests/packaging/test_workflow_secrets.py`, `docs/ROUTINES.md` §5).
 - **All AI generation goes through `GenerationProvider`** (`api/`). Internal phase: `RoutineProvider` (Claude Code routines). Live phase: `ClaudeApiProvider`. Nothing outside the provider may depend on which one is active.
 
 ## Layout

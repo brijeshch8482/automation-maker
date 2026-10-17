@@ -407,6 +407,7 @@ dev = [
     { name = "jsonschema" },
     { name = "pypdfium2" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
@@ -423,6 +424,7 @@ dev = [
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "pypdfium2", specifier = ">=4.30" },
     { name = "pytest", specifier = ">=8.3" },
+    { name = "pyyaml", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.8" },
 ]
 

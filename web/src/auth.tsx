@@ -1,4 +1,5 @@
-// Login. Supabase email magic links in deployment; a dev-only "sign in as <name>" when
+// Login. Supabase email magic links in deployment (VITE_SUPABASE_ANON_KEY holds the project's
+// publishable key, sb_publishable_...; supabase-js sends it as `apikey`, never as a Bearer token); a dev-only "sign in as <name>" when
 // VITE_DEV_AUTH=true (the API accepts "Bearer dev:<name>" only with its own DEV_AUTH on).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -24,7 +25,7 @@ interface AuthValue {
 
 const DEV_USER_KEY = "makemyexe.devUser";
 
-let supabase: Promise<SupabaseClient> | null = null;
+let supabase: { config: string; client: Promise<SupabaseClient> } | null = null;
 
 export function authMode(): AuthMode {
   if (supabaseConfig()) return "supabase";
@@ -36,10 +37,16 @@ export function authMode(): AuthMode {
 function supabaseClient(): Promise<SupabaseClient> {
   const config = supabaseConfig();
   if (!config) return Promise.reject(new Error("Supabase is not configured"));
-  supabase ??= import("@supabase/supabase-js").then(({ createClient }) =>
-    createClient(config.url, config.anonKey),
-  );
-  return supabase;
+  const key = `${config.url} ${config.anonKey}`;
+  if (supabase?.config !== key) {
+    supabase = {
+      config: key,
+      client: import("@supabase/supabase-js").then(({ createClient }) =>
+        createClient(config.url, config.anonKey),
+      ),
+    };
+  }
+  return supabase.client;
 }
 
 function readDevUser(): string | null {
@@ -113,7 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signInWithEmail(email) {
         const { error } = await (await supabaseClient()).auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: window.location.href },
+          // The site root: it must be listed in Supabase > Auth > URL Configuration (docs/DEPLOY.md).
+          options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
       },

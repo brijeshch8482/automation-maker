@@ -1,0 +1,18 @@
+# Only the API image is built from this repo root (api/Dockerfile).
+**/.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/*.db
+**/.env
+**/.env.*
+.git
+.github
+web
+engine/src
+docs
+tests
+builds-repo
+build
+**/.pytest_cache
+**/.ruff_cache

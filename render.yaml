@@ -1,0 +1,78 @@
+# Render Blueprint for the MakeMyEXE API (docs/DEPLOY.md, ARCHITECTURE.md §6.1).
+# No values are committed: every `sync: false` variable is entered in the Render dashboard.
+# Blank optional variables are treated as unset, so the defaults in api/src/api/config.py apply.
+services:
+  - type: web
+    name: makemyexe-api
+    runtime: docker
+    plan: free
+    region: singapore # closest Render region to Supabase's Mumbai (ap-south-1)
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - api/**
+        - spec/**
+        - automations/**
+        - pyproject.toml
+        - uv.lock
+    envVars:
+      # --- Fixed for this service (not secrets) ---
+      - key: PROVIDER
+        value: fake # switch to "routine" once am-spec / am-build are set up (docs/ROUTINES.md)
+      - key: DEV_AUTH
+        value: "false"
+
+      # --- Required ---
+      - key: DATABASE_URL # Supabase > Connect > Session pooler (postgresql://...:5432/postgres)
+        sync: false
+      - key: PUBLIC_BASE_URL # https://makemyexe-api.onrender.com
+        sync: false
+      - key: CORS_ORIGINS # https://makemyexe.pages.dev (comma-separated for several)
+        sync: false
+      - key: SUPABASE_URL # https://<project-ref>.supabase.co
+        sync: false
+      - key: CALLBACK_TOKEN_SECRET # random 32+ bytes
+        sync: false
+      - key: BUILD_CALLBACK_SECRET # random 32+ bytes, same value in automation-builds
+        sync: false
+
+      # --- Needed for PROVIDER=routine / Windows builds ---
+      - key: ROUTINE_SPEC_URL
+        sync: false
+      - key: ROUTINE_SPEC_TOKEN
+        sync: false
+      - key: ROUTINE_BUILD_URL
+        sync: false
+      - key: ROUTINE_BUILD_TOKEN
+        sync: false
+      - key: BUILDS_GITHUB_TOKEN
+        sync: false
+      - key: BUILDS_REPO
+        sync: false
+      - key: BUILDS_WORKFLOW
+        sync: false
+
+      # --- Optional (leave blank for the defaults) ---
+      - key: SUPABASE_JWT_SECRET # legacy HS256 projects only
+        sync: false
+      - key: SUPABASE_JWT_AUDIENCE
+        sync: false
+      - key: CATALOG_DIR # set by the image
+        sync: false
+      - key: SPEC_TIMEOUT_MIN
+        sync: false
+      - key: GENERATION_TIMEOUT_MIN
+        sync: false
+      - key: BUILD_TIMEOUT_MIN
+        sync: false
+      - key: WATCHDOG_INTERVAL_S
+        sync: false
+      - key: MAX_REPAIRS
+        sync: false
+      - key: UNCONFIRMED_EXPIRY_DAYS
+        sync: false
+      - key: DESCRIPTION_RETENTION_DAYS
+        sync: false

@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.auth import TokenVerifier
 from api.catalog import Catalog
 from api.config import Settings, get_settings
 from api.db import Database
@@ -31,18 +32,25 @@ DEV_SECRET = "dev-only-change-me"
 
 
 def check_production_settings(settings: Settings) -> None:
-    """With real routines, refuse to start on dev defaults that would let anyone call back."""
-    if settings.provider != "routine":
+    """Refuse to start a deployment, or real routines, on dev defaults.
+
+    Dev secrets would let anyone forge callbacks; dev auth would let anyone sign in as anyone;
+    SQLite inside a Render container is wiped on every deploy.
+    """
+    deployed = settings.on_render or not settings.uses_sqlite
+    if settings.provider != "routine" and not deployed:
         return
     problems = [
-        name
+        name.upper()
         for name in ("callback_token_secret", "build_callback_secret")
         if getattr(settings, name).get_secret_value() in ("", DEV_SECRET)
     ]
     if settings.dev_auth:
-        problems.append("dev_auth")
+        problems.append("DEV_AUTH must be false")
+    if settings.on_render and settings.uses_sqlite:
+        problems.append("DATABASE_URL must point to Postgres")
     if problems:
-        raise RuntimeError(f"unsafe settings for provider=routine: {', '.join(problems)}")
+        raise RuntimeError(f"unsafe settings for a deployment: {', '.join(problems)}")
 
 
 def make_provider(settings: Settings) -> GenerationProvider:
@@ -90,7 +98,8 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        await app.state.db.create_all()
+        if settings.uses_sqlite:
+            await app.state.db.create_all()  # Postgres is migrated by `python -m api.migrate`
         task = None
         if settings.watchdog_interval_s > 0:
             task = asyncio.create_task(_background_loop(app, settings.watchdog_interval_s))
@@ -105,6 +114,7 @@ def create_app(
     app.state.settings = settings
     app.state.db = Database(settings.database_url)
     app.state.catalog = Catalog.load(settings.catalog_dir)
+    app.state.auth = TokenVerifier(settings)
     app.state.jobs = JobService(
         settings, provider or make_provider(settings), dispatcher or make_dispatcher(settings)
     )

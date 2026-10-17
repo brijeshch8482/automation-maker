@@ -186,12 +186,12 @@ def test_routine_mode_refuses_dev_secrets(tmp_path):
     from api.config import Settings
 
     base = {"_env_file": None, "database_url": f"sqlite+aiosqlite:///{tmp_path / 'x.db'}"}
-    with pytest.raises(RuntimeError, match="callback_token_secret, build_callback_secret"):
+    with pytest.raises(RuntimeError, match="CALLBACK_TOKEN_SECRET, BUILD_CALLBACK_SECRET"):
         create_app(Settings(**base, provider="routine"))
     strong = {
         "callback_token_secret": SecretStr("a" * 40),
         "build_callback_secret": SecretStr("b" * 40),
     }
-    with pytest.raises(RuntimeError, match="dev_auth"):
+    with pytest.raises(RuntimeError, match="DEV_AUTH must be false"):
         create_app(Settings(**base, provider="routine", dev_auth=True, **strong))
     create_app(Settings(**base, provider="routine", **strong))

@@ -5,8 +5,12 @@ export function apiUrl(): string {
   return (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 }
 
+/**
+ * Supabase project URL and publishable key (sb_publishable_..., or a legacy anon key). Both are
+ * meant for browsers; the secret key never goes into the web app.
+ */
 export function supabaseConfig(): { url: string; anonKey: string } | null {
-  const url = import.meta.env.VITE_SUPABASE_URL ?? "";
+  const url = (import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/+$/, "");
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
   return url && anonKey ? { url, anonKey } : null;
 }

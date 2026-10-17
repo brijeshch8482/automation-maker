@@ -1,0 +1,124 @@
+# Source: automation-maker/builds-repo/.github/workflows/build.yml (synced; don't edit here).
+#
+# Started by FastAPI with workflow_dispatch on main (docs/ROUTINES.md §5), so this file always
+# comes from main. Job 1 runs generated code and has no secrets. Job 2 has the secrets and
+# never runs generated code: it only reads the artifact as data.
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Job id
+        required: true
+      branch:
+        description: Job branch, claude/job-<job_id>
+        required: true
+      attempt:
+        description: Attempt number
+        required: true
+        default: "0"
+
+run-name: Build ${{ inputs.job_id }} (attempt ${{ inputs.attempt }})
+
+permissions: {}
+
+concurrency:
+  group: build-${{ inputs.job_id }}-${{ inputs.attempt }}
+
+jobs:
+  build:
+    name: build (no secrets)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      JOB_ID: ${{ inputs.job_id }}
+      JOB_BRANCH: ${{ inputs.branch }}
+      ATTEMPT: ${{ inputs.attempt }}
+      PYTHONUTF8: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check inputs
+        run: |
+          [[ "$JOB_ID" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || { echo "::error::invalid job_id"; exit 1; }
+          [[ "$JOB_BRANCH" == "claude/job-$JOB_ID" ]] || { echo "::error::branch must be claude/job-<job_id>"; exit 1; }
+          [[ "$ATTEMPT" =~ ^[0-9]{1,2}$ ]] || { echo "::error::invalid attempt"; exit 1; }
+
+      # main holds engine/, spec/, tools/, build/ and this workflow.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Take only jobs/<job_id>/ from the job branch
+        run: |
+          git fetch --depth 1 origin "refs/heads/$JOB_BRANCH"
+          git checkout FETCH_HEAD -- "jobs/$JOB_ID"
+          # The job's code runs from here on: remove the checkout token first.
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git status --short
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install (engine and PyInstaller only)
+        run: |
+          uv sync --locked --no-dev --package makemyexe-engine
+          uv sync --locked --no-dev --only-group build --inexact
+
+      - name: Package, smoke test, launch check, guide
+        run: uv run --no-sync python -m build.package "jobs/$JOB_ID" --out dist --launch-check
+
+      - name: Upload build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ inputs.job_id }}-${{ inputs.attempt }}
+          path: |
+            dist/*.zip
+            dist/Guide.pdf
+            dist/report.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  publish:
+    name: publish (secrets, no generated code)
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: build
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: build-${{ inputs.job_id }}-${{ inputs.attempt }}
+          path: artifact
+
+      - name: Upload to R2 and call back
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          ATTEMPT: ${{ inputs.attempt }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          BUILD_CALLBACK_SECRET: ${{ secrets.BUILD_CALLBACK_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: >-
+          python3 -m build.publish --artifact-dir artifact --job-id "$JOB_ID"
+          --attempt "$ATTEMPT" --run-url "$RUN_URL" --build-result "$BUILD_RESULT"

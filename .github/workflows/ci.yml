@@ -76,6 +76,45 @@ jobs:
           path: screenshots-windows/
           if-no-files-found: error
 
+  # Every catalog automation packaged the way automation-builds does it (build.yml): the EXE
+  # folder, its smoke test, a launch check on the real Windows desktop, Guide.pdf and the zip.
+  package:
+    name: package (${{ matrix.automation }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        automation: [invoice-generator, pdf-merge, bulk-rename, make-pdf]
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install (engine and PyInstaller only, like automation-builds)
+        run: |
+          uv sync --locked --no-dev --package makemyexe-engine
+          uv sync --locked --no-dev --only-group build --inexact
+
+      - name: Package, smoke test, launch check, guide
+        run: uv run --no-sync python -m build.package automations/${{ matrix.automation }} --out dist --launch-check
+
+      - name: Upload the app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.automation }}
+          path: |
+            dist/*.zip
+            dist/Guide.pdf
+            dist/report.json
+          if-no-files-found: warn
+
   web:
     name: web
     runs-on: ubuntu-latest

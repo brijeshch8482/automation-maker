@@ -1,0 +1,51 @@
+# Copy the build snapshot (engine/ spec/ tools/ build/, uv workspace files, build.yml) to
+# automation-builds/main. Runs when an engine version is tagged (engine-v*) or by hand.
+# Needs the BUILDS_SYNC_TOKEN secret: a fine-grained token with Contents: write on
+# automation-builds only (docs/DEPLOY.md).
+name: Sync automation-builds
+
+on:
+  push:
+    tags: ["engine-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-builds
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BUILDS_REPO: ${{ vars.BUILDS_REPO || 'brijeshch8482/automation-builds' }}
+      TOKEN: ${{ secrets.BUILDS_SYNC_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check the token
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::Add the BUILDS_SYNC_TOKEN secret first (docs/DEPLOY.md)"; exit 1; }
+
+      - name: Clone automation-builds
+        run: git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${BUILDS_REPO}.git" target
+
+      - name: Copy the snapshot
+        run: python3 builds-repo/sync.py --target target --version "$GITHUB_REF_NAME" --commit "$GITHUB_SHA"
+
+      - name: Commit and push
+        working-directory: target
+        run: |
+          git config user.name "makemyexe-sync"
+          git config user.email "makemyexe-sync@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Already up to date."
+          else
+            git commit -q -m "Sync from automation-maker $GITHUB_REF_NAME (${GITHUB_SHA::7})"
+            git push origin HEAD:main
+          fi

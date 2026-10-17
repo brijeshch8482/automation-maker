@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 from pypdf import PdfReader, PdfWriter
 
-from engine.blocks import calc, counter, custom, files, pdf
+from engine.blocks import calc, counter, custom, files, pdf, template
 from engine.context import RunContext
 from engine.errors import EngineError
 from engine.loader import LoadedSpec, load_spec
@@ -101,7 +101,7 @@ def test_render_invoice(make_ctx, tmp_path):
     ctx = make_ctx()
     ctx.outs["invoice_no"] = "INV-0042"
     ctx.outs["totals"] = calc.line_totals(ctx, TOTALS)
-    doc = pdf.render_template(ctx, RenderTemplateArgs(template="invoice_basic"))
+    doc = template.render_template(ctx, RenderTemplateArgs(template="invoice_basic"))
     assert doc.extension == "pdf"
     path = tmp_path / "x.pdf"
     path.write_bytes(doc.data)
@@ -134,15 +134,15 @@ def test_render_invoice_with_unicode_and_logo(make_ctx, invoice, tmp_path):
         settings={**invoice.sample_settings(), "gstin": "SAMPLE-GSTIN", "logo": str(logo)},
     )
     ctx.outs["totals"] = calc.line_totals(ctx, TOTALS)
-    doc = pdf.render_template(ctx, RenderTemplateArgs(template="invoice_basic"))
+    doc = template.render_template(ctx, RenderTemplateArgs(template="invoice_basic"))
     assert doc.data.startswith(b"%PDF")
 
 
 def test_unknown_template_and_missing_totals(make_ctx):
     with pytest.raises(EngineError, match="not available"):
-        pdf.render_template(make_ctx(), RenderTemplateArgs(template="nope"))
+        template.render_template(make_ctx(), RenderTemplateArgs(template="nope"))
     with pytest.raises(EngineError, match=r"calc\.line_totals"):
-        pdf.render_template(make_ctx(), RenderTemplateArgs(template="invoice_basic"))
+        template.render_template(make_ctx(), RenderTemplateArgs(template="invoice_basic"))
 
 
 def merge_spec(tmp_path) -> LoadedSpec:
@@ -285,5 +285,5 @@ def test_indian_scripts_have_glyphs(make_ctx, invoice, caplog):
     ctx = make_ctx(inputs={**invoice.sample_inputs(), "customer_name": "श्री ट्रेडर्स", "items": items})
     ctx.outs["totals"] = calc.line_totals(ctx, TOTALS)
     with caplog.at_level("WARNING", logger="fpdf"):
-        pdf.render_template(ctx, RenderTemplateArgs(template="invoice_basic"))
+        template.render_template(ctx, RenderTemplateArgs(template="invoice_basic"))
     assert "missing the following glyphs" not in caplog.text

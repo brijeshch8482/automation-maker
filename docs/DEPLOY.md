@@ -119,7 +119,28 @@ Do the steps in this order; later steps need values from earlier ones.
 2. That's about 744 hours a month of uptime, inside Render's 750 free hours. The job watchdog runs inside the API, so it only works while the API is awake.
 3. Don't use a GitHub Actions cron for this: its per-run minute rounding would use up the free Actions minutes.
 
-## 5. Check the whole thing
+## 5. automation-builds (Windows builds)
+
+The Windows workflow lives in the `automation-builds` repo. Its `main` is a copy of `engine/ spec/ tools/ build/` made by the **Sync automation-builds** workflow; never edit it by hand. Secrets for this part go only into the GitHub settings pages named below.
+
+1. **Sync token.** GitHub › your avatar › Settings › Developer settings › Fine-grained tokens › Generate new token. Repository access: **only `automation-builds`**. Permissions: **Contents: Read and write** and **Workflows: Read and write** (the sync pushes `.github/workflows/build.yml`). Copy the token into **automation-maker** › Settings › Secrets and variables › Actions › New repository secret `BUILDS_SYNC_TOKEN`.
+2. **First sync.** automation-maker › Actions › *Sync automation-builds* › Run workflow (branch `main`). automation-builds `main` now has `engine/`, `spec/`, `tools/`, `build/`, `.github/workflows/build.yml` and `ENGINE_VERSION`. Later syncs run by themselves when you push a tag like `engine-v0.2.0`.
+3. **Protect `main`.** automation-builds › Settings › Rules › Rulesets › New branch ruleset for `main`: restrict updates and deletions, block force pushes. Only the sync token (you) may push it; the `am-build` routine only pushes `claude/job-*` branches.
+4. **Try a build before hosting exists.** In automation-builds create a branch `claude/job-test1` with a folder `jobs/test1/` that holds a copy of `automations/make-pdf/spec.json` and its `samples/` folder. Then Actions › *Build* › Run workflow with job id `test1`, branch `claude/job-test1`, attempt `0`. Without the settings below, the run only builds and checks: download `MakePDF.zip` and `Guide.pdf` from the run page (kept 7 days).
+5. **R2 (private file storage, 10 GB free).** Cloudflare › R2 › Create bucket `makemyexe-builds`; leave public access off. R2 › Manage API tokens › Create API token: **Object Read & Write**, applied to that bucket only. Note the Access Key ID, the Secret Access Key and your Account ID (on the R2 overview page).
+6. **Settings in automation-builds** › Settings › Secrets and variables › Actions:
+
+   | Name | Kind | Value |
+   |---|---|---|
+   | `BUILD_CALLBACK_SECRET` | secret | the **same** value as in Render |
+   | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | secrets | from step 5 |
+   | `R2_BUCKET` | secret | `makemyexe-builds` |
+   | `API_BASE_URL` | variable | `https://makemyexe-api.onrender.com` |
+
+   Set all of them or none: a half-configured publish step fails on purpose.
+7. **Let the API start builds.** GitHub › Fine-grained tokens › a second token, only `automation-builds`, **Actions: Read and write**. Put it into Render as `BUILDS_GITHUB_TOKEN`.
+
+## 6. Check the whole thing
 
 1. Open `https://makemyexe.pages.dev`. The catalog loads from the API (if the API is still waking up, the first load can take up to about 50 seconds).
 2. **Sign in:** Make a custom one › Sign in to continue › enter your email › click the link in the email. You land back on the site, signed in.

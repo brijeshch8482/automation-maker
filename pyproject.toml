@@ -10,6 +10,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+build = [
+    "pyinstaller>=6.11",
+]
 dev = [
     "jsonschema>=4.23",
     "pypdfium2>=4.30",

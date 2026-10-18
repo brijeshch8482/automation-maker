@@ -2,7 +2,7 @@
 
 **Product name:** MakeMyEXE (planned domain: makemyexe.com). The repos keep their working names `automation-maker` and `automation-builds`.
 
-**One line:** Users pick a ready-made automation or describe a custom one. We deliver a Windows app (one EXE in a zip, no install) that runs **on their own PC, offline**, with a step-by-step screenshot guide. **We never need the user's data, only the format of the task.**
+**One line:** Users pick a ready-made automation or describe a custom one. Users install **one Windows app, MakeMyEXE**, once; every automation (a few free, the rest paid or custom-made) arrives as a small signed `.mmx` file that adds itself to the app and runs **on their own PC, offline**, with a step-by-step screenshot guide. **We never need the user's data, only the format of the task.**
 
 ---
 
@@ -30,8 +30,8 @@
 | Billing for AI | Founder's Claude subscription | Anthropic API key (pay per use) |
 | App builds | Linux pack builds on GitHub Actions `ubuntu-latest` (§8, §9) | Same |
 | Windows builds | `windows-latest` only for Runner releases, native library checks and the standalone fallback | Same |
-| Signing | Packs: Ed25519 (§8.3). Runner: unsigned (internal testers only) | Packs: same. Runner: code-signing certificate in the release job |
-| Downloads | Cloudflare Worker merges Runner + layers + pack (§8.6) | Same |
+| Signing | Packs: Ed25519 (§8.3). App: unsigned (internal testers only) | Packs: same; licenses: Ed25519 `license` key. App installer + binaries: code-signing certificate in the release job (**required before launch**) |
+| Delivery | The installed MakeMyEXE app + `.mmx` bundles from the Worker ([DESKTOP_APP.md](DESKTOP_APP.md)); the per-app zip (§8.6) stays for internal testing until the app ships | App + bundles only |
 | Web hosting | Cloudflare Pages, free (`makemyexe.pages.dev`) | Same, on `makemyexe.com` |
 | FastAPI hosting | Render free web service, Docker (`makemyexe-api.onrender.com`), kept awake by a cron-job.org ping (§6.1). Local + Cloudflare Tunnel only for debugging callbacks | Render Starter or Cloud Run, on `api.makemyexe.com` |
 
@@ -43,8 +43,10 @@ The switch from internal to live replaces only the `GenerationProvider` implemen
 
 ### Flow A: Ready-made automation (instant)
 ```text
+Once: Download MakeMyEXE -> install (per-user, no admin) -> pre-installed free automations
 Catalog -> automation page (description, 🔒/🌐 badge, preview, guide)
-        -> Download: the Worker merges Runner + layers + signed catalog pack into <App>.zip (+ Guide.pdf)
+        -> Add to MakeMyEXE (free) or Buy (paid) -> the Worker streams <App>.mmx (pack + layers [+ license])
+        -> double-click -> verified and added to the app's list + Start menu
 ```
 
 ### Flow B: Custom automation (internal phase: async spec-first, two routine runs)
@@ -119,7 +121,8 @@ Exact payloads, routine prompts and callback contracts are in [`ROUTINES.md`](RO
 |---|---|---|---|
 | `automation-maker` (private) | Everything: spec, engine, blocks, catalog, tools, build, api, web, worker | Environments: `sync` (sync token), `catalog` (R2 write, catalog signing key); later the Runner code-signing certificate | Us (developed with Claude Code on the web) |
 | `automation-builds` (private) | `main`: synced snapshot of `engine/ spec/ tools/ build/` + workflows. Job branches `claude/job-<id>` contain only `jobs/<id>/` | Environments: `publish` (R2 write, callback HMAC secret, jobs signing key), `layers` (R2 write, callback HMAC secret) | `main`: sync workflow from `automation-maker`. Job branches: the `am-build` routine |
-| Cloudflare Worker `makemyexe-download` | Download merge (§8.6) | R2 bucket binding (read), `DOWNLOAD_TOKEN_SECRET` (shared with the API) | Deployed from `worker/` |
+| Cloudflare Worker `makemyexe-download` | Bundle streaming (§8.6, [DESKTOP_APP.md](DESKTOP_APP.md) §11.2) | R2 bucket binding (read), `DOWNLOAD_TOKEN_SECRET` (shared with the API) | Deployed from `worker/` |
+| API on Render | Download tokens, licenses | `LICENSE_SIGNING_KEY` (Ed25519, entitlement only: a leak allows forged licenses, never running code) | Render env |
 
 All GitHub secrets are **environment** secrets restricted to `main` (and `engine-v*` tags for `sync`), never repository secrets: a job branch could add its own workflow file, and that workflow could read every repository secret.
 
@@ -224,6 +227,8 @@ One JSON document per automation, defined as Pydantic models in `spec/` and expo
 
 ## 8. Desktop engine & delivery: Runner + packs
 
+> **Primary delivery since 2026-10-18: the installed MakeMyEXE app** (one app, automations added as signed `.mmx` bundles, shared runtime and shared layer store, offline licenses). Full design: [DESKTOP_APP.md](DESKTOP_APP.md). Everything below about the engine, packs, signing, layers, the policy gate and builds holds unchanged inside the app; only the per-app zip download below is internal-testing only.
+>
 > **Decided 2026-10-17** (Phases 2b and 2c, §13). It replaces one PyInstaller build per automation. Until 2b ships, the current per-automation EXE pipeline and the presigned R2 downloads stay live.
 >
 > **Built so far (2b, part 1):**
@@ -244,7 +249,7 @@ Two details settled while building part 1:
 - A pack also carries `samples/` (tiny fake files), so the release gate can smoke-test every pack with a new Runner.
 - The publish job builds the pack from the app folder at the pinned commit, read as data, never from Job 1's artifact. Generated code ran in Job 1 and could have changed its own output after the checks.
 
-What the user downloads (one zip; extract, double-click; no install):
+Internal testing only, until the app ships (Phase 2d): what a tester downloads per app (one zip; extract, double-click; no install):
 ```text
 InvoiceGenerator.zip
 ├── InvoiceGenerator.exe   the Runner: byte-identical for every app, only the file name differs
@@ -261,7 +266,7 @@ InvoiceGenerator.zip
 - SmartScreen and code-signing reputation build up on one binary, because the exe hash is the same for every app.
 - A block bug fix reaches every app on its next download.
 
-The user still gets one EXE per app.
+In the installed app the same runtime is installed once and every automation shares it ([DESKTOP_APP.md](DESKTOP_APP.md) §3).
 
 ### 8.1 Engine (inside the Runner)
 - **Standard UI shell:** header -> first-time setup (settings) -> inputs form -> preview (if files change) -> Run -> result (open file/folder, undo).
@@ -392,7 +397,7 @@ Typical layers: openpyxl ~4 MB, python-docx + lxml ~15 MB, pikepdf ~18 MB, panda
 
 **Start-up cost of verification:** SHA-256 runs at several hundred MB/s, so checking a pack plus an 80 MB layer adds ~0.2 s per start.
 
-**Disk on the user's PC:** every app folder carries its own Runner (~70 MB). That's the price of "no install". A later optional shared Runner install could de-duplicate it for users with many apps.
+**Disk on the user's PC:** the installed app holds one runtime (~70–80 MB) and one shared layer store, so 10 automations take ~80 MB plus their layers. (The internal per-app zip carries its own Runner each time.)
 
 ---
 
@@ -489,21 +494,23 @@ automation-maker/
 | 1 | **Spec models + engine + 3 automations** (Invoice, PDF Merge, Bulk Rename) | They run on Windows from `spec.json` |
 | 2 | Windows packaging + guide mode; `automation-builds` repo + `build.yml` | A manual dispatch produces a zip + Guide.pdf |
 | 2b | **Runner + packs:** Runner build + release gate, pack format + signing + verification, Linux pack builds (catalog and jobs), Worker download merge, R2 layout + lifecycle | Catalog downloads come from the Worker; a job's pack builds on Linux and runs in the downloaded Runner on Windows; a tampered pack is refused |
+| 2d | **Desktop app** ([DESKTOP_APP.md](DESKTOP_APP.md) §13): Hub + Run mode, import + shared store, per-automation processes, shortcuts, `.mmx` association, installer, bundle format 2, Worker bundles, website "Download MakeMyEXE" / "Add to MakeMyEXE" | On a clean Windows 11 VM: install, pre-installed automations run, a bundle with a layer imports and runs, a tampered bundle is refused, uninstall keeps the user's files |
+| 2e | **Licensing:** devices (MakeMyEXE ID), entitlements, `license` key, license checks at import and run, "My PCs", paid flag (payment stubbed) | A paid bundle imports only on a linked ID; a forwarded bundle is refused on another PC |
 | 2c | **Library layers + policy gate:** `runner.lock`, `libs.toml`, `layer.yml`, resolution in the API, `needs_library`, admin review list | A custom step importing a pre-approved library and one importing a new library both reach `ready` without a human; a rejected library triggers the rewrite repair |
 | 3 | FastAPI jobs + callbacks + `RoutineProvider`; routines `am-spec` and `am-build` set up | Description -> spec -> EXE end-to-end, triggered from curl |
 | 4 | Web: catalog, job flow with spec preview/edit, downloads | Full Flow B in the browser |
 | 5 | Rest of Wave 1 catalog + repair loop hardening + watchdog | 9 automations; failing jobs repair or fail cleanly |
-| 6 | Live phase: `ClaudeApiProvider`, Runner code signing, hosting, rate limits | Public beta |
+| 6 | Live phase: `ClaudeApiProvider`, app code signing (installer + binaries), MSI for offices, payment gateway, hosting, rate limits | Public beta; clean install on Windows 11 with Smart App Control on |
 
-Do 2b before setting up the routines in Phase 3, so `build.yml` and the `am-build` prompt change only once.
+Order: finish 2b → 2d → 2c → 2e. Payments, the MSI and code signing come with phase 6.
 
 ---
 
 ## 14. Open decisions
 
-- Pricing: free catalog + paid custom builds, or a subscription.
+- Pricing: which 3–5 automations are free and pre-installed, the price per paid automation, whether custom builds are paid ([DESKTOP_APP.md](DESKTOP_APP.md) §15).
 - Buy makemyexe.com (name decided: MakeMyEXE).
-- Code-signing route (country/business registration).
+- Code signing is **required** before launch (Smart App Control blocks unsigned apps outright). Open: individual vs business identity and the CA/cloud-HSM choice ([DESKTOP_APP.md](DESKTOP_APP.md) §14.2).
 - Before the Runner gets a code-signing certificate, harden the folder around the signed exe:
   - **DLL side-loading:** a signed exe shipped as a folder will load a planted DLL that sits beside it. Use a bootloader built with a restricted DLL search order.
   - **Integrity of `_internal/`:** Authenticode covers only the exe, so the DLLs and `.pyd` files in `_internal/` must be verified at start-up against a hash list compiled into the exe (~0.1–0.3 s).

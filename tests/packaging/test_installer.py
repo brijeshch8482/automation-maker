@@ -127,3 +127,12 @@ def test_check_refuses_to_install_on_a_development_machine(monkeypatch, tmp_path
     monkeypatch.delenv("CI", raising=False)
     with pytest.raises(SystemExit):
         installer.main(["check", str(tmp_path / "x.exe"), "--expect", "a", "--out", str(tmp_path)])
+
+
+def test_release_publish_runs_after_a_passing_installer_check_only():
+    # test-packs is skipped on a release: without always() GitHub skips publish too.
+    condition = RELEASE["jobs"]["publish"]["if"]
+    assert condition.startswith("always() && needs.installer.result == 'success'")
+    assert RELEASE["jobs"]["publish"]["needs"] == "installer"
+    installer = RELEASE["jobs"]["installer"]["if"]
+    assert "always()" in installer and "success" in installer

@@ -144,9 +144,11 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # always(): test-packs is skipped on a release, and a skipped job anywhere above would
+  # otherwise skip this one too. It still runs only after a passing installer check.
   publish:
     needs: installer
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: always() && needs.installer.result == 'success' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: catalog

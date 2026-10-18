@@ -9,6 +9,11 @@ manifest goes last, so the API never points at a file that isn't there. Standard
 Settings (GitHub secrets of automation-maker): R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
 R2_SECRET_ACCESS_KEY, R2_BUCKET; a token with Object Read & Write on that bucket. With none of
 them set, the apps are only checked (downloads not switched on yet).
+
+Phase 2b: with --runner-release and PACK_SIGNING_KEY (+ PACK_KEY_ID, default catalog-1), the
+Runner and a signed pack per app are published as zip blocks too (build/publish_packs.py) and
+each manifest entry gets `pack`, so the API serves it through the download Worker. The per-app
+zips stay, for internal testing.
 """
 
 from __future__ import annotations
@@ -24,11 +29,14 @@ from pathlib import Path
 from typing import Any
 
 from build.publish import EXE, MAX_UPLOAD_BYTES, PublishError, upload
+from build.publish_packs import KeyNotTrusted, publish_packs
 
 R2_SETTINGS = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
 AUTOMATION_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 MANIFEST_KEY = "catalog/manifest.json"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_KEY_ID = "catalog-1"
 
 
 def collect(artifacts: Path) -> list[dict[str, Any]]:
@@ -85,7 +93,15 @@ def manifest(apps: list[dict[str, Any]], commit: str, now: datetime) -> dict[str
     return {"generated_at": built_at, "automations": entries}
 
 
-def publish(artifacts: Path, commit: str, env: dict[str, str], now: datetime) -> dict[str, Any]:
+def publish(
+    artifacts: Path,
+    commit: str,
+    env: dict[str, str],
+    now: datetime,
+    runner_release: Path | None = None,
+    signing_key: str = "",
+    key_id: str = DEFAULT_KEY_ID,
+) -> dict[str, Any]:
     apps = collect(artifacts)
     result = manifest(apps, commit, now)
     configured = [name for name in R2_SETTINGS if env.get(name)]
@@ -100,6 +116,7 @@ def publish(artifacts: Path, commit: str, env: dict[str, str], now: datetime) ->
         upload(app["archive"], entry["zip"], env, "application/zip")
         upload(app["guide"], entry["guide"], env, "application/pdf")
         print(f"uploaded {app['id']} {app['version']}")
+    _publish_packs(apps, result, env, runner_release, signing_key, key_id)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "manifest.json"
         path.write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -108,14 +125,55 @@ def publish(artifacts: Path, commit: str, env: dict[str, str], now: datetime) ->
     return result
 
 
+def _publish_packs(
+    apps: list[dict[str, Any]],
+    result: dict[str, Any],
+    env: dict[str, str],
+    runner_release: Path | None,
+    signing_key: str,
+    key_id: str,
+) -> None:
+    """Runner + signed packs as zip blocks (Phase 2b), when the key and the Runner are there."""
+    if not signing_key.strip():
+        print("::warning::PACK_SIGNING_KEY is not set; packs not published (docs/DEPLOY.md §9).")
+        return
+    if runner_release is None or not (runner_release / "release.json").is_file():
+        print("::warning::No release Runner from the runner job; packs not published.")
+        return
+    try:
+        entries = publish_packs(
+            apps,
+            REPO_ROOT / "automations",
+            runner_release,
+            signing_key,
+            key_id,
+            REPO_ROOT / "build" / "trusted_keys.json",
+            lambda path, key, content_type: upload(path, key, env, content_type),
+        )
+    except KeyNotTrusted as err:
+        print(f"::warning::{err}")
+        return
+    for app_id, pack in entries.items():
+        result["automations"][app_id]["pack"] = pack
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m build.publish_catalog", description=__doc__)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--commit", default="")
+    parser.add_argument("--runner-release", type=Path, help="the runner-release artifact folder")
     args = parser.parse_args(argv)
     env = {name: os.environ.get(name, "") for name in R2_SETTINGS}
     try:
-        result = publish(args.artifacts, args.commit, env, datetime.now(UTC))
+        result = publish(
+            args.artifacts,
+            args.commit,
+            env,
+            datetime.now(UTC),
+            args.runner_release,
+            os.environ.get("PACK_SIGNING_KEY", ""),
+            os.environ.get("PACK_KEY_ID") or DEFAULT_KEY_ID,
+        )
     except PublishError as err:
         print(f"::error::{err}")
         return 1

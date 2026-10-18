@@ -108,7 +108,10 @@ def test_ci_publishes_only_from_main_after_tests_and_runs_no_app_code():
     ci = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     job = ci.split("\n  publish-catalog:")[1].split("\n  web:")[0]
     assert "github.event_name == 'push' && github.ref == 'refs/heads/main'" in job
-    assert "needs: [test, package]" in job
+    assert "needs: [test, package, runner]" in job
+    # Packs are signed here, from automations/ in the checkout (data), never from an artifact.
+    assert "secrets.PACK_SIGNING_KEY" in job and "automations" in job
+    assert ci.count("secrets.PACK_SIGNING_KEY") == 1
     assert "python3 -m build.publish_catalog" in job
     for forbidden in ("uv sync", "build.package", "pull_request_target"):
         assert forbidden not in job

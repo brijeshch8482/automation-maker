@@ -211,7 +211,7 @@ jobs:
         run: |
           args=()
           for pack in packs/packs/*/app.mmx; do args+=(--check-pack "$pack"); done
-          uv run --no-sync python -m build.runner --out dist/runner --extra-keys packs/ci-keys.json --launch-check "${args[@]}"
+          uv run --no-sync python -m build.runner --out dist/runner --extra-keys packs/ci-keys.json --launch-check --release-out dist/runner-release "${args[@]}"
 
       - name: Upload the Runner (main)
         if: always() && github.event_name == 'push'
@@ -223,6 +223,17 @@ jobs:
             dist/runner/report.json
           if-no-files-found: warn
           retention-days: 7
+
+      # The copy publish catalog uploads to R2: committed keys only (the throwaway CI key is
+      # gone, and the release stage proved a CI-signed pack is refused).
+      - name: Upload the release Runner (main)
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-release
+          path: dist/runner-release/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload the Runner report (PR)
         if: always() && github.event_name != 'push'
@@ -292,7 +303,7 @@ jobs:
   publish-catalog:
     name: publish catalog
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test, package]
+    needs: [test, package, runner]
     runs-on: ubuntu-latest
     environment: catalog
     timeout-minutes: 15
@@ -302,12 +313,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          sparse-checkout: build
+          sparse-checkout: |
+            build
+            automations
 
       - uses: actions/download-artifact@v4
         with:
           pattern: app-*
           path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: runner-release
+          path: runner-release
 
       - name: Upload apps and manifest to R2
         env:
@@ -315,7 +333,12 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: python3 -m build.publish_catalog --artifacts artifacts --commit "$GITHUB_SHA"
+          # Signs the catalog packs (Phase 2b, docs/DEPLOY.md §9); unset: per-app zips only.
+          PACK_SIGNING_KEY: ${{ secrets.PACK_SIGNING_KEY }}
+          PACK_KEY_ID: ${{ vars.PACK_KEY_ID }}
+        run: >-
+          python3 -m build.publish_catalog --artifacts artifacts --commit "$GITHUB_SHA"
+          --runner-release runner-release
 
   worker:
     name: worker

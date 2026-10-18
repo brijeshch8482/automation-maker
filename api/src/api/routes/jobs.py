@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from api.auth import CurrentUser
 from api.db import Job
+from api.downloads import TOKEN_TTL_S, bundle_link
 from api.jobs import JobConflict, JobNotFound, SpecInvalid
 from api.routes.deps import Jobs, Session, StorageDep
-from api.schemas import AnswersIn, CreateJob, JobCreated, JobOut, JobSummary, SpecIn
+from api.schemas import (
+    AnswersIn,
+    CreateJob,
+    DownloadOut,
+    JobCreated,
+    JobOut,
+    JobSummary,
+    SpecIn,
+)
+from api.states import JobState
 
 router = APIRouter(tags=["jobs"])
 
@@ -35,6 +45,37 @@ async def get_job(
     job_id: str, user: CurrentUser, jobs: Jobs, session: Session, storage: StorageDep
 ) -> JobOut:
     return JobOut.of(await _load(jobs, session, job_id, user), storage)
+
+
+@router.get("/jobs/{job_id}/bundle")
+async def job_bundle(
+    job_id: str,
+    request: Request,
+    user: CurrentUser,
+    jobs: Jobs,
+    session: Session,
+    storage: StorageDep,
+) -> DownloadOut:
+    """Add to MakeMyEXE for a ready custom app: its signed pack as a .mmx, through the Worker.
+    Only the job's owner gets a link (licenses for custom apps come in phase 2e)."""
+    job = await _load(jobs, session, job_id, user)
+    settings = request.app.state.settings
+    secret = settings.download_token_secret.get_secret_value()
+    worker = settings.download_worker_url
+    if not (job.state == JobState.READY and job.pack and storage and worker and secret):
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "no bundle for this app yet")
+    guide = (
+        storage.link(job.guide_key, filename="Guide.pdf", inline=True).url if job.guide_key else ""
+    )
+    spec = job.spec or {}
+    return DownloadOut(
+        version=str(spec.get("version", "")),
+        filename=f"{job.pack['exe']}.mmx",
+        size_bytes=job.pack.get("bundle_bytes"),
+        url=bundle_link(worker, secret, job.pack),
+        guide_url=guide,
+        expires_in=TOKEN_TTL_S,
+    )
 
 
 @router.post("/jobs/{job_id}/answers", status_code=status.HTTP_202_ACCEPTED)

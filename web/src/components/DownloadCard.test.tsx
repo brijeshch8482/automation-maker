@@ -148,3 +148,26 @@ test("before the first release the download page says so", async () => {
   expect(await screen.findByText(/first release is on its way/)).toBeTruthy();
   expect(screen.getByRole("button", { name: /Download for Windows/ })).toHaveProperty("disabled", true);
 });
+
+test("a ready custom app with a pack: Add to MakeMyEXE fetches a fresh bundle link", async () => {
+  useApi();
+  const job = makeJob({
+    state: "ready",
+    download_url: "https://acct.r2.cloudflarestorage.com/b/jobs/job_01TEST/attempt-0/InvoiceGenerator.zip?X-Amz-Signature=a",
+    guide_url: null,
+    bundle_available: true,
+  });
+  const bundle = { ...BUNDLE, filename: "InvoiceGenerator.mmx", url: "https://dl.example.workers.dev/d/job-token" };
+  const calls = mockFetch(({ path }) =>
+    path === "/jobs/job_01TEST" ? { body: job } : path === "/jobs/job_01TEST/bundle" ? { body: bundle } : undefined,
+  );
+  const open = vi.spyOn(browser, "open").mockImplementation(() => {});
+  const user = userEvent.setup();
+  renderAt("/jobs/job_01TEST");
+  await user.click(await screen.findByRole("button", { name: "Add to MakeMyEXE" }));
+  expect(open).toHaveBeenCalledWith(bundle.url);
+  expect(calls.find((c) => c.path === "/jobs/job_01TEST/bundle")?.auth).toBeTruthy();
+  expect(screen.getByText("Your download has started").parentElement!.textContent).toContain("InvoiceGenerator.mmx");
+  expect(screen.getByRole("link", { name: "Standalone app (.zip)" })).toHaveProperty("href", job.download_url);
+  open.mockRestore();
+});

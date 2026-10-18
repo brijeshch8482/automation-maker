@@ -164,3 +164,96 @@ def test_main_exit_codes(tmp_path, monkeypatch, sent):
     args = ["--artifact-dir", str(folder), "--attempt", "0", "--run-url", "u"]
     assert publish.main([*args, "--job-id", "job_1", "--build-result", "success"]) == 0
     assert publish.main([*args, "--job-id", "bad id", "--build-result", "success"]) == 1
+
+
+# --- Signed job packs for the installed app (Phase 2d) -------------------------------------------
+
+needs_openssl = pytest.mark.skipif(
+    __import__("shutil").which("openssl") is None, reason="needs the openssl CLI"
+)
+
+
+@pytest.fixture
+def job_setup(tmp_path, monkeypatch):
+    import shutil
+
+    from build import pack as build_pack
+    from tests.conftest import REPO_ROOT
+
+    job_dir = tmp_path / "job-src" / "jobs" / "job_1"
+    shutil.copytree(REPO_ROOT / "tests" / "fixtures" / "jobs" / "word-count", job_dir)
+    private, public = build_pack.keygen("jobs-1", tmp_path / "keys")
+    repo = tmp_path / "repo"
+    (repo / "build").mkdir(parents=True)
+    (repo / "build" / "trusted_keys.json").write_text(json.dumps({"jobs-1": public}))
+    monkeypatch.setattr(publish, "REPO_ROOT", repo)
+    uploads = {}
+
+    def upload(path, key, env, content_type=None):
+        uploads[key] = path.read_bytes()
+
+    monkeypatch.setattr(publish, "upload", upload)
+    monkeypatch.setattr(publish, "send_callback", lambda url, secret, payload: 204)
+    env = {**SETTINGS, "PACK_SIGNING_KEY": private.read_text()}
+    return job_dir, env, uploads, public
+
+
+@needs_openssl
+def test_passing_job_gets_a_signed_pack_and_bundle(tmp_path, job_setup):
+    from engine.pack import verify_pack
+    from spec.fingerprint import spec_sha256
+
+    job_dir, env, uploads, public = job_setup
+    spec = json.loads((job_dir / "spec.json").read_text())
+    folder = artifact(
+        tmp_path, {"status": "passed", "exe": "WordCount"}, ("WordCount.zip", "Guide.pdf")
+    )
+    payload = publish.publish(folder, "job_1", 0, "u", "success", env, job_dir, spec_sha256(spec))
+    prefix = "packs/jobs/job_1/attempt-0"
+    assert payload["pack"] == {
+        "prefix": prefix,
+        "exe": "WordCount",
+        "layers": [],
+        "bundle_bytes": payload["pack"]["bundle_bytes"],
+    }
+    assert {
+        f"{prefix}/app.mmx",
+        f"{prefix}/bundle/blocks.bin",
+        f"{prefix}/bundle/layout.json",
+    } <= set(uploads)
+    pack = tmp_path / "app.mmx"
+    pack.write_bytes(uploads[f"{prefix}/app.mmx"])
+    verified = verify_pack(pack, {"jobs-1": bytes.fromhex(public)}, tmp_path)
+    assert verified.manifest["kind"] == "job" and verified.manifest["id"] == spec["id"]
+    layout = json.loads(uploads[f"{prefix}/bundle/layout.json"])
+    assert [e["name"] for e in layout["entries"]] == [
+        "bundle.json",
+        f"packs/{spec['id']}-{spec['version']}.mmx",
+    ]
+
+
+@needs_openssl
+def test_job_pack_refuses_a_spec_that_was_not_confirmed(tmp_path, job_setup):
+    job_dir, env, uploads, _ = job_setup
+    folder = artifact(
+        tmp_path, {"status": "passed", "exe": "WordCount"}, ("WordCount.zip", "Guide.pdf")
+    )
+    with pytest.raises(PublishError, match="not the spec the user confirmed"):
+        publish.publish(folder, "job_1", 0, "u", "success", env, job_dir, "0" * 64)
+    assert uploads == {}  # nothing goes out
+
+
+@needs_openssl
+def test_no_pack_without_a_trusted_key_but_the_zip_still_goes_out(tmp_path, job_setup, capsys):
+    job_dir, env, uploads, _ = job_setup
+    folder = artifact(
+        tmp_path, {"status": "passed", "exe": "WordCount"}, ("WordCount.zip", "Guide.pdf")
+    )
+    payload = publish.publish(
+        folder, "job_1", 0, "u", "success", {**env, "PACK_KEY_ID": "other-1"}, job_dir
+    )
+    assert "pack" not in payload and "jobs/job_1/attempt-0/WordCount.zip" in uploads
+    assert "not in build/trusted_keys.json" in capsys.readouterr().out
+    payload = publish.publish(folder, "job_1", 0, "u", "success", SETTINGS, job_dir)
+    assert "pack" not in payload
+    assert "PACK_SIGNING_KEY is not set" in capsys.readouterr().out

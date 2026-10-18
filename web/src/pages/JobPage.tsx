@@ -5,8 +5,10 @@ import {
   answerQuestions,
   ApiError,
   confirmJob,
+  getJobBundle,
   saveSpec,
   type Answer,
+  type DownloadInfo,
   type Job,
 } from "../api";
 import JobProgress from "../components/JobProgress";
@@ -15,7 +17,7 @@ import RequireLogin from "../components/RequireLogin";
 import SpecEditor from "../components/SpecEditor";
 import SpecPreview from "../components/SpecPreview";
 import StateBadge from "../components/StateBadge";
-import { AfterDownload } from "../components/DownloadCard";
+import { AfterAdd, AfterDownload, browser } from "../components/DownloadCard";
 import { Button, buttonClass, Card, ErrorText, Spinner, usePageMeta } from "../components/ui";
 import { ATTEMPT_LABELS, ATTEMPT_STATUS_LABELS, formatDate } from "../lib/jobs";
 import { useJob } from "../lib/useJob";
@@ -166,21 +168,62 @@ function StatusPanel({ job }: { job: Job }) {
 }
 
 function ReadyDownload({ job }: { job: Job }) {
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState<"zip" | "bundle" | null>(null);
+  const [bundle, setBundle] = useState<DownloadInfo | null>(null);
+  const [bundleError, setBundleError] = useState(false);
   const filename = new URL(job.download_url!).pathname.split("/").pop() ?? "app.zip";
+
+  // The bundle link is fetched on click: it is signed for 15 minutes only.
+  const addToApp = async () => {
+    setBundleError(false);
+    try {
+      const info = await getJobBundle(job.id);
+      setBundle(info);
+      browser.open(info.url);
+      setStarted("bundle");
+    } catch {
+      setBundleError(true);
+    }
+  };
+
   return (
     <>
       <div className="flex flex-wrap gap-3">
-        <a href={job.download_url!} onClick={() => setStarted(true)} className={buttonClass("primary")}>
-          Download for Windows
-        </a>
+        {job.bundle_available ? (
+          <>
+            <button type="button" onClick={() => void addToApp()} className={buttonClass("primary")}>
+              Add to MakeMyEXE
+            </button>
+            <a href={job.download_url!} onClick={() => setStarted("zip")} className={buttonClass("secondary")}>
+              Standalone app (.zip)
+            </a>
+          </>
+        ) : (
+          <a href={job.download_url!} onClick={() => setStarted("zip")} className={buttonClass("primary")}>
+            Download for Windows
+          </a>
+        )}
         {job.guide_url && (
           <a href={job.guide_url} target="_blank" rel="noreferrer" className={buttonClass("secondary")}>
             Read the guide (PDF)
           </a>
         )}
       </div>
-      {started && <AfterDownload filename={decodeURIComponent(filename)} guideUrl={job.guide_url} />}
+      {job.bundle_available && (
+        <p className="mt-2 text-sm text-slate-600">
+          Opens in the MakeMyEXE app.{" "}
+          <Link to="/download" className="font-semibold text-brand-700 hover:underline">
+            Get MakeMyEXE
+          </Link>
+        </p>
+      )}
+      {bundleError && (
+        <p role="alert" className="mt-2 text-sm text-rose-700">
+          Couldn't get the download. Try again in a minute.
+        </p>
+      )}
+      {started === "bundle" && bundle && <AfterAdd filename={bundle.filename} onRetry={() => void addToApp()} />}
+      {started === "zip" && <AfterDownload filename={decodeURIComponent(filename)} guideUrl={job.guide_url} />}
       <p className="mt-3 text-xs text-slate-500">Links stay valid for 15 minutes. Reload the page for fresh ones.</p>
     </>
   );

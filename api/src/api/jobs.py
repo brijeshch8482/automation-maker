@@ -181,6 +181,11 @@ class JobService:
         if payload["status"] == "passed":
             job.artifact_key = payload.get("artifact_key")
             job.guide_key = payload.get("guide_key")
+            pack = payload.get("pack")
+            # Only a pack where this attempt's must be: the prefix is part of what the API
+            # signs into download tokens.
+            expected = f"packs/jobs/{job.id}/attempt-{attempt}"
+            job.pack = pack if pack and pack.get("prefix") == expected else None
             self._set_state(job, JobState.READY)
         else:
             job.last_report = payload.get("report") or {}

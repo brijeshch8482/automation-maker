@@ -1,6 +1,9 @@
-// makemyexe-download: GET /d/<token> streams <Name>.zip = Runner + layers + app pack, merged
-// from pre-built zip blocks in R2 (docs/ARCHITECTURE.md §8.6). Bound to the bucket (read only),
-// it holds no R2 keys; the token from the API names exactly what goes in and expires in 15 min.
+// makemyexe-download: GET /d/<token> streams, merged from pre-built zip blocks in R2
+// (docs/ARCHITECTURE.md §8.6), either <Name>.zip = Runner + layers + app pack (the per-app
+// download for internal testing) or <Name>.mmx = a bundle for the installed app: the pack's
+// bundle block (bundle.json + packs/<id>-<version>.mmx) + its layer blocks (docs/DESKTOP_APP.md
+// §4, §11.2). Bound to the bucket (read only), it holds no R2 keys; the token from the API names
+// exactly what goes in and expires in 15 min.
 
 import { TokenError, verifyToken } from "./token.js";
 import { LayoutError, planZip } from "./zip.js";
@@ -12,10 +15,13 @@ function text(status, body) {
   });
 }
 
-async function layout(bucket, prefix) {
+const BUNDLE_ENTRY = /^(bundle\.json|packs\/[a-z0-9.-]+\.mmx)$/;
+const LAYER_ENTRY = /^layers\/[A-Za-z0-9_.]+-[A-Za-z0-9_.+!]+\//;
+
+async function layout(bucket, prefix, allow) {
   const object = await bucket.get(`${prefix}/layout.json`);
   if (!object) throw new LayoutError(`missing ${prefix}`);
-  return { prefix, layout: await object.json() };
+  return { prefix, layout: await object.json(), allow };
 }
 
 async function stream(bucket, parts, writable) {
@@ -57,12 +63,19 @@ export async function handle(request, env, ctx) {
     return text(403, "This download link is not valid.");
   }
 
+  const bundle = payload.kind === "bundle";
   let plan;
   try {
-    const runner = await layout(env.BUCKET, payload.runner);
     const blocks = [];
-    for (const prefix of [...payload.layers, payload.pack]) blocks.push(await layout(env.BUCKET, prefix));
-    plan = planZip(runner, blocks, `${payload.name}.exe`);
+    if (bundle) {
+      for (const prefix of payload.layers) blocks.push(await layout(env.BUCKET, `${prefix}/bundle`, LAYER_ENTRY));
+      blocks.push(await layout(env.BUCKET, `${payload.pack}/bundle`, BUNDLE_ENTRY));
+      plan = planZip(null, blocks);
+    } else {
+      const runner = await layout(env.BUCKET, payload.runner);
+      for (const prefix of [...payload.layers, payload.pack]) blocks.push(await layout(env.BUCKET, prefix));
+      plan = planZip(runner, blocks, `${payload.name}.exe`);
+    }
   } catch (err) {
     if (err instanceof LayoutError) return text(503, "This app is being updated. Try again in a few minutes.");
     throw err;
@@ -74,8 +87,8 @@ export async function handle(request, env, ctx) {
   if (ctx?.waitUntil) ctx.waitUntil(done);
   return new Response(readable, {
     headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${payload.name}.zip"`,
+      "Content-Type": bundle ? "application/octet-stream" : "application/zip",
+      "Content-Disposition": `attachment; filename="${payload.name}.${bundle ? "mmx" : "zip"}"`,
       "Content-Length": String(plan.size),
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",

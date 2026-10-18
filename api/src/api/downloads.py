@@ -2,7 +2,9 @@
 
 The token is base64url(payload) "." base64url(HMAC-SHA256(DOWNLOAD_TOKEN_SECRET, payload part)),
 the same format worker/src/token.js checks. The payload names exactly what the Worker may
-merge (Runner, layers, pack) and the app name; it expires in 15 minutes.
+merge and the app name; it expires in 15 minutes. Two kinds: the per-app zip (Runner + layers
++ pack, internal testing) and the bundle for the installed app (`kind: "bundle"`: the pack's
+bundle block + its layers, no Runner; docs/DESKTOP_APP.md §4, §11.2).
 """
 
 from __future__ import annotations
@@ -31,24 +33,27 @@ def _b64(data: bytes) -> str:
 def download_token(
     secret: str,
     *,
-    runner: str,
+    runner: str | None,
     layers: list[str],
     pack: str,
     name: str,
     now: float | None = None,
     ttl: int = TOKEN_TTL_S,
 ) -> str:
-    if not (RUNNER.match(runner) and PACK.match(pack) and NAME.match(name)):
+    """A zip token with `runner`; with runner=None, a bundle token."""
+    if not (PACK.match(pack) and NAME.match(name)):
+        raise ValueError("bad download payload")
+    if runner is not None and not RUNNER.match(runner):
         raise ValueError("bad download payload")
     if not all(LAYER.match(layer) for layer in layers):
         raise ValueError("bad layer key")
-    payload = {
-        "runner": runner,
-        "layers": list(layers),
-        "pack": pack,
-        "name": name,
-        "exp": int((now if now is not None else time.time()) + ttl),
-    }
+    payload: dict[str, Any] = {"runner": runner} if runner is not None else {"kind": "bundle"}
+    payload.update(
+        layers=list(layers),
+        pack=pack,
+        name=name,
+        exp=int((now if now is not None else time.time()) + ttl),
+    )
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     mac = hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()
     return f"{body}.{_b64(mac)}"
@@ -59,6 +64,18 @@ def worker_link(base_url: str, secret: str, pack_entry: dict[str, Any]) -> str:
     token = download_token(
         secret,
         runner=pack_entry["runner"],
+        layers=list(pack_entry.get("layers") or []),
+        pack=pack_entry["prefix"],
+        name=pack_entry["exe"],
+    )
+    return f"{base_url.rstrip('/')}/d/{token}"
+
+
+def bundle_link(base_url: str, secret: str, pack_entry: dict[str, Any]) -> str:
+    """The Worker URL for the same pack as a bundle (.mmx) for the installed app."""
+    token = download_token(
+        secret,
+        runner=None,
         layers=list(pack_entry.get("layers") or []),
         pack=pack_entry["prefix"],
         name=pack_entry["exe"],

@@ -8,9 +8,11 @@ Called by build/publish_catalog.py in CI's "publish catalog" job (push to main, 
   pointer `runner/latest-<major>.json`.
 - Each catalog app: a pack made and signed here from automations/<id>/ in the checked-out
   commit (data, never a build artifact), with PACK_SIGNING_KEY, as
-  `packs/catalog/<id>/<version>/{app.mmx, Guide.pdf, blocks.bin, layout.json}`.
-- The manifest entry gets `pack: {prefix, runner, layers, exe, size_bytes}`; the API then serves
-  that app through the download Worker (api/downloads.py).
+  `packs/catalog/<id>/<version>/{app.mmx, Guide.pdf, blocks.bin, layout.json}`, plus the
+  bundle block for the installed app (docs/DESKTOP_APP.md §4, §11.2) in `.../bundle/`:
+  `bundle.json` + `packs/<id>-<version>.mmx`. The Worker puts layer blocks next to it.
+- The manifest entry gets `pack: {prefix, runner, layers, exe, size_bytes, bundle_bytes}`; the
+  API then serves that app through the download Worker (api/downloads.py).
 
 Nothing is published if the signing key's public half isn't in build/trusted_keys.json: a
 Runner that doesn't trust the key would refuse every pack. The log then prints the public key
@@ -34,6 +36,13 @@ from build.publish import PublishError
 RUNNER_MAJOR = build_pack.RUNNER_MAJOR
 # upload(path, key, content_type)
 Uploader = Callable[[Path, str, str], None]
+
+
+def pack_layer_pins(pack: Path) -> list[tuple[str, str]]:
+    """The layers a signed pack pins (its manifest); none until phase 2c."""
+    with zipfile.ZipFile(pack) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+    return [(f"{p['dist']}-{p['version']}", p["record_sha256"]) for p in manifest["layers"]]
 
 
 class KeyNotTrusted(PublishError):
@@ -65,6 +74,21 @@ def download_size(runner: dict[str, Any], blocks: list[dict[str, Any]], exe_name
         total += layout["size"]
         total += sum(46 + len(e["name"].encode()) for e in layout["entries"])
     return total + 22
+
+
+def bundle_size(blocks: list[dict[str, Any]]) -> int:
+    """What the Worker sends for a bundle (no Runner): blocks, directory, end record."""
+    total = 22
+    for layout in blocks:
+        total += layout["size"]
+        total += sum(46 + len(e["name"].encode()) for e in layout["entries"])
+    return total
+
+
+def bundle_json(pack_entry: str, layers: list[str]) -> bytes:
+    """The table of contents (untrusted by the app, engine/bundle.py); licenses come in 2e."""
+    toc = {"format": 2, "packs": [pack_entry], "layers": layers, "licenses": []}
+    return json.dumps(toc, indent=1).encode()
 
 
 def runner_from_release(release_dir: Path, work: Path) -> tuple[str, Path]:
@@ -122,10 +146,20 @@ def publish_packs(
             layout = zipblocks.make_blocks(
                 [("app.mmx", pack), ("Guide.pdf", app["guide"])], blocks_dir
             )
+            pack_entry = f"packs/{app['id']}-{app['version']}.mmx"
+            layer_names = [name for name, _ in pack_layer_pins(pack)]
+            toc = work / "toc" / app["id"] / "bundle.json"
+            toc.parent.mkdir(parents=True)
+            toc.write_bytes(bundle_json(pack_entry, layer_names))
+            bundle_dir = work / "bundle" / app["id"]
+            bundle_layout = zipblocks.make_blocks(
+                [("bundle.json", toc), (pack_entry, pack)], bundle_dir
+            )
             upload(pack, f"{prefix}/app.mmx", "application/octet-stream")
             upload(app["guide"], f"{prefix}/Guide.pdf", "application/pdf")
             for name in ("blocks.bin", "layout.json"):
                 upload(blocks_dir / name, f"{prefix}/{name}", "application/octet-stream")
+                upload(bundle_dir / name, f"{prefix}/bundle/{name}", "application/octet-stream")
             entries[app["id"]] = {
                 "prefix": prefix,
                 "runner": runner_prefix,
@@ -133,6 +167,7 @@ def publish_packs(
                 "exe": app["exe"],
                 "size_bytes": download_size(runner_layout, [layout], f"{app['exe']}.exe"),
                 "pack_bytes": pack.stat().st_size,
+                "bundle_bytes": bundle_size([bundle_layout]),  # + its layers' blocks (2c)
             }
             print(f"uploaded {prefix} (pack {pack.stat().st_size} bytes)")
     return entries

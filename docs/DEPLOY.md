@@ -276,7 +276,7 @@ The Worker `makemyexe-download` joins the Runner, library layers and an app pack
    - `DOWNLOAD_WORKER_URL` = that URL;
    - `DOWNLOAD_TOKEN_SECRET` = the value from step 1.
 
-Run the workflow again whenever `worker/` changes. It runs only when started by hand, so it can never create the `worker` environment unprotected.
+Run the workflow again whenever `worker/` changes. Phase 2d added bundles ("Add to MakeMyEXE"): redeploy right after that change reaches `main`, because the website offers bundle links as soon as *publish catalog* has uploaded the bundle blocks, and an older Worker refuses them ("This download link is not valid"). Without a Worker (`DOWNLOAD_WORKER_URL` empty) the site keeps offering the per-app zip. It runs only when started by hand, so it can never create the `worker` environment unprotected.
 
 ## 12. MakeMyEXE app release (installer)
 

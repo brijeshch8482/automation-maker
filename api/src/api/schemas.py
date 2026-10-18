@@ -49,6 +49,17 @@ class DownloadOut(BaseModel):
     built_at: str | None = None
 
 
+class AppDownloadOut(BaseModel):
+    """The MakeMyEXE installer (docs/DESKTOP_APP.md §2.1): a short-lived link into R2."""
+
+    version: str
+    filename: str
+    size_bytes: int | None
+    sha256: str | None
+    url: str
+    expires_in: int
+
+
 # --- Jobs -------------------------------------------------------------------------------
 
 

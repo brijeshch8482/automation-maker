@@ -21,6 +21,7 @@ const NAV = [
   { to: "/automations", label: "Automations" },
   { to: "/#how-it-works", label: "How it works" },
   { to: "/custom", label: "Custom app" },
+  { to: "/download", label: "Get the app" },
 ];
 
 export default function Layout() {
@@ -227,6 +228,7 @@ function Footer() {
             { to: "/automations", label: "Automations" },
             { to: "/#how-it-works", label: "How it works" },
             { to: "/custom", label: "Request a custom app" },
+            { to: "/download", label: "Download MakeMyEXE" },
           ]}
         />
         <div>

@@ -36,7 +36,11 @@ export async function signToken(secret, payload) {
   return `${body}.${base64url(mac)}`;
 }
 
-/** The checked payload: {runner, layers, pack, name, exp}. Throws TokenError otherwise. */
+/**
+ * The checked payload. A zip (the per-app download): {runner, layers, pack, name, exp}.
+ * A bundle for the installed app (docs/DESKTOP_APP.md §4): {kind: "bundle", layers, pack, name,
+ * exp}, no Runner. Throws TokenError otherwise.
+ */
 export async function verifyToken(secret, token, now = Date.now() / 1000) {
   if (!secret) throw new TokenError("not configured");
   const [body, mac, extra] = String(token || "").split(".");
@@ -54,11 +58,14 @@ export async function verifyToken(secret, token, now = Date.now() / 1000) {
   } catch {
     throw new TokenError("malformed");
   }
-  const { runner, layers, pack, name, exp } = payload;
+  const { kind = "zip", runner, layers, pack, name, exp } = payload;
   if (typeof exp !== "number" || exp < now) throw new TokenError("expired");
-  if (!RUNNER.test(runner) || !PACK.test(pack) || !NAME.test(name)) throw new TokenError("bad payload");
+  if (kind !== "zip" && kind !== "bundle") throw new TokenError("bad payload");
+  if (kind === "zip" && !RUNNER.test(runner)) throw new TokenError("bad payload");
+  if (kind === "bundle" && runner !== undefined) throw new TokenError("bad payload");
+  if (!PACK.test(pack) || !NAME.test(name)) throw new TokenError("bad payload");
   if (!Array.isArray(layers) || layers.length > MAX_LAYERS || !layers.every((l) => LAYER.test(l))) {
     throw new TokenError("bad payload");
   }
-  return { runner, layers, pack, name, exp };
+  return kind === "bundle" ? { kind, layers, pack, name, exp } : { kind, runner, layers, pack, name, exp };
 }

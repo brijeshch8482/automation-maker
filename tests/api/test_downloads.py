@@ -221,3 +221,79 @@ def test_r2_account_id_also_accepts_the_endpoint_url():
     ):
         assert r2_account_id(value) == bare, value
         assert Settings(_env_file=None, r2_account_id=value).r2_account_id == bare, value
+
+
+# --- The installed app: bundles and the installer (Phase 2d) -----------------------------------
+
+
+async def test_bundle_endpoint_streams_the_pack_as_mmx(ctx, monkeypatch):
+    from pydantic import SecretStr
+
+    pack = {**PACK_ENTRY, "bundle_bytes": 61_000}
+    manifest = {"automations": {"make-pdf": {**MANIFEST["automations"]["make-pdf"], "pack": pack}}}
+    storage, _ = make_storage(lambda r: httpx.Response(200, json=manifest))
+    ctx.app.state.storage = storage
+    # Not until the Worker is configured.
+    assert (await ctx.client.get("/automations/make-pdf/bundle")).status_code == 503
+
+    settings = ctx.app.state.settings
+    monkeypatch.setattr(settings, "download_worker_url", "https://dl.example.workers.dev")
+    monkeypatch.setattr(settings, "download_token_secret", SecretStr("s3cret"))
+    body = (await ctx.client.get("/automations/make-pdf/bundle")).json()
+    assert body["filename"] == "MakePDF.mmx" and body["size_bytes"] == 61_000
+    token = body["url"].removeprefix("https://dl.example.workers.dev/d/")
+    body_part = token.split(".")[0]
+    payload = json.loads(base64.urlsafe_b64decode(body_part + "=" * (-len(body_part) % 4)))
+    assert payload["kind"] == "bundle" and "runner" not in payload
+    assert (payload["pack"], payload["layers"]) == ("packs/catalog/make-pdf/1.0.0", [])
+    assert (await ctx.client.get("/automations/nope/bundle")).status_code == 404
+    assert (await ctx.client.get("/automations/pdf-merge/bundle")).status_code == 503
+
+
+async def test_bundle_needs_a_published_bundle_block(ctx, monkeypatch):
+    from pydantic import SecretStr
+
+    manifest = {
+        "automations": {"make-pdf": {**MANIFEST["automations"]["make-pdf"], "pack": PACK_ENTRY}}
+    }
+    storage, _ = make_storage(lambda r: httpx.Response(200, json=manifest))
+    ctx.app.state.storage = storage
+    settings = ctx.app.state.settings
+    monkeypatch.setattr(settings, "download_worker_url", "https://dl.example.workers.dev")
+    monkeypatch.setattr(settings, "download_token_secret", SecretStr("s3cret"))
+    # Published before bundles existed (no bundle_bytes): not offered.
+    assert (await ctx.client.get("/automations/make-pdf/bundle")).status_code == 503
+
+
+LATEST = {
+    "version": "1.0.0",
+    "key": "app/1.0.0/MakeMyEXE-Setup-1.0.0.exe",
+    "size_bytes": 36_000_000,
+    "sha256": "ab" * 32,
+}
+
+
+async def test_latest_app_is_a_signed_link_to_the_installer(ctx):
+    assert (await ctx.client.get("/app/latest")).status_code == 503  # no storage
+
+    def handler(request):
+        if request.url.path.endswith("/app/latest.json"):
+            return httpx.Response(200, json=LATEST)
+        return httpx.Response(404)
+
+    storage, seen = make_storage(handler)
+    ctx.app.state.storage = storage
+    body = (await ctx.client.get("/app/latest")).json()
+    assert body["version"] == "1.0.0" and body["filename"] == "MakeMyEXE-Setup-1.0.0.exe"
+    assert body["size_bytes"] == 36_000_000 and body["sha256"] == "ab" * 32
+    assert "/app/1.0.0/MakeMyEXE-Setup-1.0.0.exe?" in body["url"]
+    assert body["expires_in"] == 900
+    await ctx.client.get("/app/latest")
+    assert len(seen) == 1  # cached
+
+
+async def test_latest_app_before_a_release_or_with_a_bad_pointer():
+    storage, _ = make_storage(lambda r: httpx.Response(404))
+    assert await storage.app_latest() is None
+    storage, _ = make_storage(lambda r: httpx.Response(200, json={**LATEST, "key": "../x"}))
+    assert await storage.app_latest() is None

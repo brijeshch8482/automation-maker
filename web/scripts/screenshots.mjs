@@ -200,7 +200,7 @@ async function jobFlow(browser, device, viewport, spec) {
   await shot(page, "job-generating", device);
 
   const branch = `claude/job-${jobId}`;
-  await routineCallback(jobId, { mode: "build", attempt: 0, status: "ok", branch, commit_sha: "abc1234", used_custom_step: false });
+  await routineCallback(jobId, { mode: "build", attempt: 0, status: "ok", branch, commit_sha: "abc1234".padEnd(40, "0"), used_custom_step: false });
   await buildCallback({
     job_id: jobId,
     attempt: 0,
@@ -211,7 +211,7 @@ async function jobFlow(browser, device, viewport, spec) {
   await page.getByText("Fixing a problem found in the build").waitFor({ timeout: 10_000 });
   await shot(page, "job-repairing", device);
 
-  await routineCallback(jobId, { mode: "repair", attempt: 1, status: "ok", branch, commit_sha: "def5678", used_custom_step: false });
+  await routineCallback(jobId, { mode: "repair", attempt: 1, status: "ok", branch, commit_sha: "def5678".padEnd(40, "0"), used_custom_step: false });
   await buildCallback({
     job_id: jobId,
     attempt: 1,
@@ -275,6 +275,7 @@ async function jobFlowShots(browser) {
 // --- 3. Sign-in screens (Supabase Auth, answered by this script) ---------------------------
 
 const SUPABASE = "https://demo-project.supabase.co";
+const WORKER = "https://makemyexe-download.demo.workers.dev";
 
 function fakeSession(email) {
   const now = Math.floor(Date.now() / 1000);
@@ -300,28 +301,41 @@ async function fakeSupabase(page) {
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   const r2 = "https://acct.r2.cloudflarestorage.com/makemyexe-builds/catalog/make-pdf/1.0.0";
+  const zip = {
+    version: "1.0.0",
+    filename: "MakePDF.zip",
+    size_bytes: 51_200_000,
+    url: `${r2}/MakePDF.zip?X-Amz-Signature=demo`,
+    guide_url: `${r2}/Guide.pdf?X-Amz-Signature=demo`,
+    expires_in: 900,
+    built_at: "2026-10-17T11:00:00Z",
+  };
+  const responses = {
+    "/automations/make-pdf/download": zip,
+    "/automations/make-pdf/bundle": { ...zip, filename: "MakePDF.mmx", size_bytes: 61_000, url: `${WORKER}/d/demo` },
+    "/app/latest": {
+      version: "1.0.0",
+      filename: "MakeMyEXE-Setup-1.0.0.exe",
+      size_bytes: 38_200_000,
+      sha256: "ab".repeat(32),
+      url: "https://acct.r2.cloudflarestorage.com/makemyexe-builds/app/1.0.0/MakeMyEXE-Setup-1.0.0.exe?X-Amz-Signature=demo",
+      expires_in: 900,
+    },
+  };
   await page.route(`${API}/**`, (route) => {
-    const body = route.request().url().endsWith("/automations/make-pdf/download")
-      ? {
-          version: "1.0.0",
-          filename: "MakePDF.zip",
-          size_bytes: 51_200_000,
-          url: `${r2}/MakePDF.zip?X-Amz-Signature=demo`,
-          guide_url: `${r2}/Guide.pdf?X-Amz-Signature=demo`,
-          expires_in: 900,
-          built_at: "2026-10-17T11:00:00Z",
-        }
-      : [];
+    const body = responses[new URL(route.request().url()).pathname] ?? [];
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  // The "download": R2 answers with an attachment, so the page stays where it is.
-  await page.route("https://acct.r2.cloudflarestorage.com/**", (route) =>
-    route.fulfill({
-      status: 200,
-      headers: { "Content-Type": "application/zip", "Content-Disposition": 'attachment; filename="MakePDF.zip"' },
-      body: "PK",
-    }),
-  );
+  // The "downloads": R2 and the Worker answer with an attachment, so the page stays where it is.
+  for (const host of ["https://acct.r2.cloudflarestorage.com/**", `${WORKER}/**`]) {
+    await page.route(host, (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream", "Content-Disposition": 'attachment; filename="file"' },
+        body: "PK",
+      }),
+    );
+  }
 }
 
 async function authShots(browser) {
@@ -374,11 +388,21 @@ async function authShots(browser) {
         }
 
         await page.goto(`${SITE}/automations/make-pdf`, { waitUntil: "networkidle" });
-        await page.getByText("51 MB · version 1.0.0").waitFor();
+        await page.getByText("61 KB · version 1.0.0").waitFor();
         await shot(page, "download-ready", device);
+        await page.getByRole("button", { name: "Add to MakeMyEXE" }).click();
+        await page.getByText("Your download has started").waitFor();
+        await shot(page, "add-started", device);
+        await page.getByRole("button", { name: /standalone app/ }).click();
+        await page.getByText("Extract All").waitFor();
+        await shot(page, "download-started", device);
+
+        await page.goto(`${SITE}/download`, { waitUntil: "networkidle" });
+        await page.getByText("38 MB · version 1.0.0").waitFor();
+        await shot(page, "app-download", device);
         await page.getByRole("button", { name: "Download for Windows" }).click();
         await page.getByText("Your download has started").waitFor();
-        await shot(page, "download-started", device);
+        await shot(page, "app-download-started", device);
         await page.close();
       }
     } finally {

@@ -26,6 +26,7 @@ import httpx
 log = logging.getLogger(__name__)
 
 MANIFEST_KEY = "catalog/manifest.json"
+APP_LATEST_KEY = "app/latest.json"  # written by build/installer.py publish
 MANIFEST_TTL_S = 300  # a new release shows up within five minutes
 LINK_TTL_S = 900
 
@@ -108,8 +109,7 @@ class Storage:
         self._bucket = bucket
         self._client = client or httpx.AsyncClient(timeout=10.0)
         self._clock = clock or (lambda: datetime.now(UTC))
-        self._manifest: dict[str, Any] | None = None
-        self._manifest_read_at = 0.0
+        self._cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 
     def link(self, key: str, *, filename: str, inline: bool = False, ttl: int = LINK_TTL_S) -> Link:
         """A GET link that saves the file as `filename` (or shows it, for the guide)."""
@@ -128,12 +128,25 @@ class Storage:
 
     async def catalog_manifest(self) -> dict[str, Any]:
         """{automation id: entry}; empty when nothing is published or R2 can't be read."""
-        fresh = time.monotonic() - self._manifest_read_at < MANIFEST_TTL_S
-        if self._manifest is not None and fresh:
-            return self._manifest
+        data = await self._cached_json(MANIFEST_KEY)
+        return dict(data.get("automations", {})) if data else {}
+
+    async def app_latest(self) -> dict[str, Any] | None:
+        """The installer pointer app/latest.json (docs/DEPLOY.md §12); None until a release."""
+        data = await self._cached_json(APP_LATEST_KEY)
+        if not data or not isinstance(data.get("key"), str) or not data["key"].startswith("app/"):
+            return None
+        return data
+
+    async def _cached_json(self, key: str) -> dict[str, Any] | None:
+        """A small JSON object from the bucket, cached a few minutes. None if missing or
+        unreadable; on a network error the last good copy is kept."""
+        cached = self._cache.get(key)
+        if cached is not None and time.monotonic() - cached[0] < MANIFEST_TTL_S:
+            return cached[1]
         url = presign_url(
             host=self._host,
-            path=f"/{self._bucket}/{MANIFEST_KEY}",
+            path=f"/{self._bucket}/{key}",
             access_key=self._access_key,
             secret_key=self._secret,
             region="auto",
@@ -143,21 +156,23 @@ class Storage:
         try:
             response = await self._client.get(url)
         except httpx.HTTPError as err:
-            log.warning("catalog manifest unreachable: %r", err)
-            return self._manifest or {}
+            log.warning("%s unreachable: %r", key, err)
+            return cached[1] if cached else None
+        data: dict[str, Any] | None
         if response.status_code == 404:
-            manifest: dict[str, Any] = {}
+            data = None
         elif response.is_success:
             try:
-                manifest = dict(response.json().get("automations", {}))
+                parsed = response.json()
+                data = parsed if isinstance(parsed, dict) else None
             except ValueError:
-                log.warning("catalog manifest is not valid JSON")
-                manifest = {}
+                log.warning("%s is not valid JSON", key)
+                data = None
         else:
-            log.warning("catalog manifest: R2 returned %s", response.status_code)
-            return self._manifest or {}
-        self._manifest, self._manifest_read_at = manifest, time.monotonic()
-        return manifest
+            log.warning("%s: R2 returned %s", key, response.status_code)
+            return cached[1] if cached else None
+        self._cache[key] = (time.monotonic(), data)
+        return data
 
 
 def make_storage(settings: Any) -> Storage | None:

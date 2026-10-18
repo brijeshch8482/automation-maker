@@ -4,6 +4,7 @@ import Layout, { PageShell } from "./components/Layout";
 import AutomationPage from "./pages/AutomationPage";
 import CatalogPage from "./pages/CatalogPage";
 import CustomPage from "./pages/CustomPage";
+import DownloadPage from "./pages/DownloadPage";
 import HomePage from "./pages/HomePage";
 import JobPage from "./pages/JobPage";
 import { PrivacyPage, TermsPage } from "./pages/LegalPages";
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="automations" element={<CatalogPage />} />
           <Route path="automations/:id" element={<AutomationPage />} />
           <Route path="custom" element={<CustomPage />} />
+          <Route path="download" element={<DownloadPage />} />
           <Route path="jobs/:id" element={<JobPage />} />
           <Route path="me/jobs" element={<MyJobsPage />} />
           <Route path="login" element={<LoginPage />} />

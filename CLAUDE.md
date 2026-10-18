@@ -1,6 +1,6 @@
 # MakeMyEXE
 
-Web product where users pick a ready-made automation or describe a custom one, and we build a Windows EXE that runs offline on their own PC, with a screenshot guide. Delivery is moving to one shared Runner + signed app packs merged at download (`docs/ARCHITECTURE.md` §8, Phases 2b/2c); until 2b ships, the per-automation PyInstaller pipeline stays live. Read `docs/ARCHITECTURE.md` before starting any phase; read `docs/ROUTINES.md` before touching generation, callbacks or the build workflow.
+Web product where users pick a ready-made automation or describe a custom one, and we build a Windows EXE that runs offline on their own PC, with a screenshot guide. Primary delivery: one installed MakeMyEXE app, with automations added as signed `.mmx` bundles (`docs/DESKTOP_APP.md`). The Runner + signed packs (`docs/ARCHITECTURE.md` §8) run inside it; the per-app zip is for internal testing only. Read `docs/ARCHITECTURE.md` before starting any phase; read `docs/ROUTINES.md` before touching generation, callbacks or the build workflow.
 
 ## Rules that must never be broken
 - **Format, not data:** the AI and server never need user data; real data is entered only inside the EXE.

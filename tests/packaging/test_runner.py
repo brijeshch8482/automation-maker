@@ -9,6 +9,7 @@ import yaml
 from build import runner
 from build.pack_check import PackCheck
 from engine.blocks import IMPLEMENTATIONS
+from engine.keys import parse_keys
 from spec.fingerprint import spec_sha256
 from tests.conftest import REPO_ROOT
 from tools.check_job import CODE_MODULES
@@ -96,3 +97,10 @@ def test_largest_parts_groups_by_folder(tmp_path):
         "_internal/PySide6/Qt6Gui.dll": 2.0,
         "_internal/PySide6/plugins": 1.2,
     }
+
+
+def test_committed_keys_are_valid():
+    # A file the Runner can't read would make it trust nothing and refuse every pack.
+    keys = parse_keys((REPO_ROOT / "build" / "trusted_keys.json").read_text(encoding="utf-8"))
+    assert {"catalog-1", "jobs-1"} <= set(keys)
+    assert all(len(key) == 32 for key in keys.values())

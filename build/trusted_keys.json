@@ -1,3 +1,5 @@
 {
-  "_comment": "Ed25519 public keys (hex, 32 bytes) the Runner trusts for app packs. Public, so they belong in the repo; the private keys live only in the GitHub environments `catalog` (automation-maker) and `publish` (automation-builds). How to make them: docs/DEPLOY.md §9."
+  "_comment": "Ed25519 public keys (hex, 32 bytes) the Runner trusts for app packs. Public, so they belong in the repo; the private keys live only in the GitHub environments `catalog` (automation-maker) and `publish` (automation-builds). How to make them: docs/DEPLOY.md §9.",
+  "catalog-1": "4fcb03351be23aced141c1271822848d7ed6c6a7d3262be04c05a9b803b3b932",
+  "jobs-1": "f8e34b607087f79ba2d6b286b64e55a359e2c1078ba00e08dd5e0ad7ce661e9c"
 }

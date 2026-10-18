@@ -278,6 +278,22 @@ The Worker `makemyexe-download` joins the Runner, library layers and an app pack
 
 Run the workflow again whenever `worker/` changes. It runs only when started by hand, so it can never create the `worker` environment unprotected.
 
+## 12. MakeMyEXE app release (installer)
+
+The installed app (docs/DESKTOP_APP.md) ships as `MakeMyEXE-Setup-<version>.exe`, a per-user installer (no admin) made with Inno Setup by `.github/workflows/release.yml`. It needs no new secret: it signs the free set with `PACK_SIGNING_KEY` and uploads with the R2 secrets, all from the `catalog` environment (§6, §9).
+
+1. **Before the first release:** §9 is done, and the public key is in `build/trusted_keys.json`. Otherwise the first job stops with "the signing key ... is not in build/trusted_keys.json", and prints the public key to add.
+2. **Version:** the app version is the engine version, `version` in `engine/pyproject.toml` (and `engine/__init__.py`; a test keeps them equal). Raise it in a PR before a release.
+3. **Release:** automation-maker › Actions › *Release* › Run workflow (`main`). It runs these jobs in order:
+   - signs the four catalog automations (the pre-installed set);
+   - builds and checks the Runner on Windows, then builds the installer;
+   - installs it on the Windows runner: the Hub with the pre-installed set, each automation's smoke test, a `.mmx` opened the way a double-click does, then two uninstalls (keep the store, then remove it). A file in Documents must survive both;
+   - uploads `app/<version>/MakeMyEXE-Setup-<version>.exe`, then `app/latest.json` to R2.
+4. **Check:** the run's *installer-check* artifact has `report.json`, with the installer size and the installed size. The website's "Download MakeMyEXE" button (phase 2d-d) reads `app/latest.json`.
+5. **Try it on a real PC:** download the installer from the run's *installer* artifact (kept 3 days), run it, open MakeMyEXE from the Start menu, add a `.mmx`, then uninstall it from Settings › Apps. Without code signing (live phase), Windows SmartScreen shows "Windows protected your PC": click **More info › Run anyway**.
+
+A pull request that changes the installer runs the same build and install check with a throwaway key, and publishes nothing. R2: keep the latest 2 versions under `app/` and delete older ones by hand (§10); never add a lifecycle rule for `app/`.
+
 ## Running the API image locally
 
 ```bash

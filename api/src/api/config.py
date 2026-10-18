@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -88,6 +89,14 @@ class Settings(BaseSettings):
                 return json.loads(text)
             return [o.strip().rstrip("/") for o in text.split(",") if o.strip()]
         return value
+
+    @field_validator("r2_account_id")
+    @classmethod
+    def _account_id(cls, value: str) -> str:
+        """Accept the S3 endpoint URL Cloudflare shows (https://<id>.r2.cloudflarestorage.com)
+        as well as the bare 32-character ID; same as build.publish.r2_account_id."""
+        match = re.search(r"[0-9a-f]{32}", value.strip().lower())
+        return match.group(0) if match else value.strip()
 
     @field_validator("supabase_url", "public_base_url")
     @classmethod

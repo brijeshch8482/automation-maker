@@ -31,6 +31,7 @@ from typing import Any
 
 JOB_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 EXE = re.compile(r"^[A-Za-z0-9]{1,40}$")
+ACCOUNT_ID = re.compile(r"[0-9a-f]{32}")
 TEXT_LIMIT = {"stage": 40, "command": 1000, "test": 300, "log_tail": 8000}
 MAX_UPLOAD_BYTES = 500_000_000
 SETTINGS = (
@@ -93,9 +94,16 @@ def passed_files(artifact: Path, report: dict[str, Any]) -> tuple[Path, Path]:
     return archive, guide
 
 
+def r2_account_id(value: str) -> str:
+    """The 32-character account ID, also when given as the S3 endpoint URL Cloudflare shows
+    next to it (https://<id>.r2.cloudflarestorage.com); same as api.config's validator."""
+    match = ACCOUNT_ID.search(value.strip().lower())
+    return match.group(0) if match else value.strip()
+
+
 def upload(path: Path, key: str, env: dict[str, str], content_type: str | None = None) -> None:
     """R2 speaks the S3 API; the aws CLI is preinstalled on GitHub's Ubuntu runners."""
-    endpoint = f"https://{env['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com"
+    endpoint = f"https://{r2_account_id(env['R2_ACCOUNT_ID'])}.r2.cloudflarestorage.com"
     command = ["aws", "s3", "cp", str(path), f"s3://{env['R2_BUCKET']}/{key}"]
     command += ["--endpoint-url", endpoint, "--only-show-errors"]
     if content_type:

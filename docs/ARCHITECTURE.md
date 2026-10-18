@@ -496,13 +496,13 @@ automation-maker/
 | 2b | **Runner + packs:** Runner build + release gate, pack format + signing + verification, Linux pack builds (catalog and jobs), Worker download merge, R2 layout + lifecycle | Catalog downloads come from the Worker; a job's pack builds on Linux and runs in the downloaded Runner on Windows; a tampered pack is refused |
 | 2d | **Desktop app** ([DESKTOP_APP.md](DESKTOP_APP.md) §13): Hub + Run mode, import + shared store, per-automation processes, shortcuts, `.mmx` association, installer, bundle format 2, Worker bundles, website "Download MakeMyEXE" / "Add to MakeMyEXE" | On a clean Windows 11 VM: install, pre-installed automations run, a bundle with a layer imports and runs, a tampered bundle is refused, uninstall keeps the user's files |
 | 2e | **Licensing:** devices (MakeMyEXE ID), entitlements, `license` key, license checks at import and run, "My PCs", paid flag (payment stubbed) | A paid bundle imports only on a linked ID; a forwarded bundle is refused on another PC |
-| 2c | **Library layers + policy gate:** `runner.lock`, `libs.toml`, `layer.yml`, resolution in the API, `needs_library`, admin review list | A custom step importing a pre-approved library and one importing a new library both reach `ready` without a human; a rejected library triggers the rewrite repair |
+| 2c | **Library layers + policy gate:** `runner.lock`, `libs.toml`, `layer.yml`, resolution in the API, `needs_library`, admin review list | A custom step importing a pre-approved library and one importing a new library both reach `ready` without a human; a rejected library triggers the rewrite repair. Layers and the pack manifest are keyed by platform (`windows-x64` only for now; macOS later, DESKTOP_APP.md §16) |
 | 3 | FastAPI jobs + callbacks + `RoutineProvider`; routines `am-spec` and `am-build` set up | Description -> spec -> EXE end-to-end, triggered from curl |
 | 4 | Web: catalog, job flow with spec preview/edit, downloads | Full Flow B in the browser |
 | 5 | Rest of Wave 1 catalog + repair loop hardening + watchdog | 9 automations; failing jobs repair or fail cleanly |
 | 6 | Live phase: `ClaudeApiProvider`, app code signing (installer + binaries), MSI for offices, payment gateway, hosting, rate limits | Public beta; clean install on Windows 11 with Smart App Control on |
 
-Order: finish 2b → 2d → 2c → 2e. Payments, the MSI and code signing come with phase 6.
+Order: finish 2b → 2d → 2c → 2e. Payments, the MSI and code signing come with phase 6. Launch order: internal testing → domain → Windows public release → then macOS is decided (DESKTOP_APP.md §16).
 
 ---
 

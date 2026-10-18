@@ -309,11 +309,13 @@ layers/<dist>/<version>/blocks.bin, layout.json, RECORD.json
 |---|---|---|
 | 2b (finish) | Publish the catalog packs + the Runner; download tokens through the Worker | As in ARCHITECTURE §13 (the per-app zip is fine for internal testing) |
 | **2d: Desktop app** | Hub + Run mode + import + store + per-automation processes + shortcuts + `.mmx` association + Inno Setup installer + bundle format 2 + Worker bundles + website "Download MakeMyEXE" / "Add to MakeMyEXE" | Install the app on a clean Windows 11 VM; pre-installed automations run; a downloaded bundle (with a layer) imports and runs; a tampered bundle is refused; uninstall keeps the user's files |
-| 2c | Library layers + policy gate (unchanged), now feeding the shared store | As in ARCHITECTURE §13 |
+| 2c | Library layers + policy gate (unchanged), now feeding the shared store. **Layers and the pack manifest are keyed by platform** (`windows-x64` the only one for now), so macOS (§16) is another platform build, not a format change | As in ARCHITECTURE §13 |
 | **2e: Licensing** | devices, entitlements, license key + signing, license checks in import/run, "My PCs", paid flag in the catalog (payment gateway stubbed) | A paid bundle imports only on a linked ID; a forwarded bundle is refused on another PC |
 | 6 (live) | Code signing (installer + binaries), MSI for offices, payment gateway, Smart App Control test | Clean install on Windows 11 with SAC on: no block, no "unknown publisher" |
 
 Order: finish 2b → 2d → 2c → 2e. Payments and code signing come with the live phase.
+
+**Launch order (decided 2026-10-18):** finish internal testing → buy the domain → Windows public release → then decide on macOS (§16).
 
 ---
 
@@ -362,3 +364,23 @@ Order: finish 2b → 2d → 2c → 2e. Payments and code signing come with the l
 6. **Internal phase:** keep the per-app zip download alongside the app until 2d is verified? (Recommendation: yes.)
 7. **Installer tool:** Inno Setup (simple, Windows build) vs NSIS (builds on Linux). (Recommendation: Inno Setup, since releases already run on windows-latest.)
 8. **MSI for offices:** at launch, or only when a business asks? (Default: when a business asks.)
+
+---
+
+## 16. macOS (later, not planned yet)
+
+Decided 2026-10-18: **no Mac work until after the Windows release.** Kept here so earlier phases don't close the door.
+
+**Already platform-neutral:** spec, API, website, Worker, R2, licensing, the Ed25519 seal and `trusted_keys.json`, and the `.mmx` pack itself (spec + pure-Python custom step + samples: one pack runs on both). The engine is Python + PySide6, so the UI ports.
+
+**What a Mac version needs:**
+- **Runner:** PyInstaller `MakeMyEXE.app`, arm64 only (Intel Macs are fading out).
+- **Signing is required from day one:** Apple Developer Program ($99/year), Developer ID, hardened runtime, notarization on every release. Since macOS 15, unsigned apps can only be opened through System Settings, so even testers need a signed build.
+- **Layers:** macOS wheels per layer, **codesigned with our Team ID** in CI (library validation). Not the `disable-library-validation` entitlement. That's why 2c keys layers by platform.
+- **Install and store:** a `.dmg` (drag to Applications), store in `~/Library/Application Support/MakeMyEXE`, `.mmx` association through `Info.plist` (document type + UTI), the Hub as the only entry point (no Start menu shortcuts), a "Remove all data" button since uninstall is drag-to-Trash.
+- **Engine:** a Mac replacement for `shortcuts.py`, `open` instead of `explorer`, path/case checks, per-OS guide screenshots.
+- **CI cost:** macOS minutes count 10× on private repos. Mac runs only for Runner releases and layer builds; custom packs stay Linux-tested (pure Python + allowlist).
+- **Not the Mac App Store:** its sandbox forbids running downloaded code. Developer ID distribution only.
+
+Rough effort when we start: 1–2 weeks of code, plus the Apple membership.
+

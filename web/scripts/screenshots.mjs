@@ -139,6 +139,13 @@ async function startApi() {
         CALLBACK_TOKEN_SECRET: CALLBACK_SECRET,
         BUILD_CALLBACK_SECRET: BUILD_SECRET,
         BUILDS_GITHUB_TOKEN: "", // fake dispatcher
+        // Download links are signed locally; nothing is fetched from these (fake) hosts.
+        R2_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+        R2_ACCESS_KEY_ID: "demo",
+        R2_SECRET_ACCESS_KEY: "demo",
+        R2_BUCKET: "makemyexe-builds",
+        DOWNLOAD_WORKER_URL: "https://makemyexe-download.demo.workers.dev",
+        DOWNLOAD_TOKEN_SECRET: "demo",
       },
     },
   );
@@ -219,6 +226,7 @@ async function jobFlow(browser, device, viewport, spec) {
     run_url: "https://github.com/brijeshch8482/automation-builds/actions/runs/2",
     artifact_key: `jobs/${jobId}/attempt-1/InvoiceGenerator.zip`,
     guide_key: `jobs/${jobId}/attempt-1/Guide.pdf`,
+    pack: { prefix: `packs/jobs/${jobId}/attempt-1`, exe: "InvoiceGenerator", layers: [], bundle_bytes: 61234 },
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.getByText("Your app is ready").waitFor();

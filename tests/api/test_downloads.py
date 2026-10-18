@@ -297,3 +297,65 @@ async def test_latest_app_before_a_release_or_with_a_bad_pointer():
     assert await storage.app_latest() is None
     storage, _ = make_storage(lambda r: httpx.Response(200, json={**LATEST, "key": "../x"}))
     assert await storage.app_latest() is None
+
+
+async def test_ready_custom_app_with_a_pack_offers_add_to_makemyexe(ctx, monkeypatch):
+    from pydantic import SecretStr
+
+    from tests.api.conftest import ALICE, BOB
+
+    job_id = await ctx.create_job()
+    await ctx.to_building(job_id)
+    prefix = f"packs/jobs/{job_id}/attempt-0"
+    r = await ctx.build_callback(
+        job_id=job_id,
+        attempt=0,
+        status="passed",
+        run_url="https://github.com/x/automation-builds/actions/runs/1",
+        artifact_key=f"jobs/{job_id}/attempt-0/InvoiceGenerator.zip",
+        guide_key=f"jobs/{job_id}/attempt-0/Guide.pdf",
+        report=None,
+        pack={"prefix": prefix, "exe": "InvoiceGenerator", "layers": [], "bundle_bytes": 4321},
+    )
+    assert r.status_code == 204
+    job = await ctx.get_job(job_id)
+    assert job["bundle_available"] is True
+    # Not yet configured: no link.
+    url = f"/jobs/{job_id}/bundle"
+    assert (await ctx.client.get(url, headers=ALICE)).status_code == 503
+
+    storage, _ = make_storage(lambda r: httpx.Response(200))
+    ctx.app.state.storage = storage
+    settings = ctx.app.state.settings
+    monkeypatch.setattr(settings, "download_worker_url", "https://dl.example.workers.dev")
+    monkeypatch.setattr(settings, "download_token_secret", SecretStr("s3cret"))
+    body = (await ctx.client.get(url, headers=ALICE)).json()
+    assert body["filename"] == "InvoiceGenerator.mmx" and body["size_bytes"] == 4321
+    token = body["url"].removeprefix("https://dl.example.workers.dev/d/")
+    part = token.split(".")[0]
+    payload = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+    assert (payload["kind"], payload["pack"]) == ("bundle", prefix)
+    assert f"/jobs/{job_id}/attempt-0/Guide.pdf?" in body["guide_url"]
+    # Someone else's job: not found, like every other job route.
+    assert (await ctx.client.get(url, headers=BOB)).status_code == 404
+
+
+async def test_a_pack_named_for_another_job_is_ignored(ctx):
+    job_id = await ctx.create_job()
+    await ctx.to_building(job_id)
+    r = await ctx.build_callback(
+        job_id=job_id,
+        attempt=0,
+        status="passed",
+        run_url=None,
+        artifact_key=f"jobs/{job_id}/attempt-0/App.zip",
+        guide_key=None,
+        report=None,
+        pack={
+            "prefix": "packs/jobs/job_01OTHEROTHEROTHEROTHEROTHE/attempt-0",
+            "exe": "App",
+            "bundle_bytes": 10,
+        },
+    )
+    assert r.status_code == 204
+    assert (await ctx.get_job(job_id))["bundle_available"] is False

@@ -107,6 +107,8 @@ class JobOut(BaseModel):
     # Short-lived links to the finished app, only when the job is ready and R2 is configured.
     download_url: str | None = None
     guide_url: str | None = None
+    # A signed pack exists: GET /jobs/{id}/bundle gives "Add to MakeMyEXE" (Phase 2d).
+    bundle_available: bool = False
     created_at: datetime
     updated_at: datetime
     attempts: list[AttemptOut]
@@ -122,6 +124,7 @@ class JobOut(BaseModel):
         return cls(
             download_url=download_url,
             guide_url=guide_url,
+            bundle_available=bool(job.state == JobState.READY and job.pack),
             id=job.id,
             state=job.state,
             description=job.description,
@@ -200,6 +203,17 @@ class BuildReport(BaseModel):
     log_tail: str | None = Field(default=None, max_length=20_000)
 
 
+class JobPack(BaseModel):
+    """Where Job 2 put the job's signed pack; checked against the job and attempt on arrival."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    prefix: str = Field(pattern=r"^packs/jobs/[A-Za-z0-9_-]{1,64}/attempt-\d{1,2}$")
+    exe: str = Field(pattern=r"^[A-Za-z0-9]{1,40}$")
+    layers: list[str] = Field(default_factory=list, max_length=50)
+    bundle_bytes: int = Field(gt=0)
+
+
 class BuildCallback(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -210,3 +224,4 @@ class BuildCallback(BaseModel):
     artifact_key: str | None = None
     guide_key: str | None = None
     report: BuildReport | None = None
+    pack: JobPack | None = None

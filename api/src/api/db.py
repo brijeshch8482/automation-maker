@@ -72,6 +72,8 @@ class Job(Base):
     run_url: Mapped[str | None] = mapped_column(Text)
     artifact_key: Mapped[str | None] = mapped_column(Text)
     guide_key: Mapped[str | None] = mapped_column(Text)
+    # The signed pack for the installed app: {prefix, exe, layers, bundle_bytes} (Phase 2d).
+    pack: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     last_report: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     failure_reason: Mapped[str | None] = mapped_column(Text)
 

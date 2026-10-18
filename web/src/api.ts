@@ -47,6 +47,8 @@ export interface Job {
   run_url: string | null;
   download_url: string | null;
   guide_url: string | null;
+  /** A signed pack exists: getJobBundle gives "Add to MakeMyEXE". Absent on older APIs. */
+  bundle_available?: boolean;
   created_at: string;
   updated_at: string;
   attempts: JobAttempt[];
@@ -212,6 +214,11 @@ export async function createJob(description: string): Promise<string> {
 
 export function getJob(id: string): Promise<Job> {
   return request<Job>(jobPath(id), { auth: true });
+}
+
+/** A fresh 15-minute link to the job's .mmx bundle (the owner only). */
+export function getJobBundle(id: string): Promise<DownloadInfo> {
+  return request<DownloadInfo>(`${jobPath(id)}/bundle`, { auth: true });
 }
 
 export function answerQuestions(id: string, answers: Answer[]): Promise<Job> {

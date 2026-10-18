@@ -67,7 +67,7 @@ Secrets are **environment** secrets restricted to `main`, never repository secre
 |---|---|---|---|---|---|
 | automation-maker › `catalog` | `main` | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (upload token), `PACK_SIGNING_KEY` (catalog-1) | CI *publish catalog*, *Release* | Signs and uploads our own apps and the installer, only from `main` | ✅ |
 | automation-maker › `worker` | `main` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `DOWNLOAD_TOKEN_SECRET` | *Deploy download Worker* | Deploying the Worker and giving it its secret | ✅ |
-| automation-maker › `sync` | `main`, tag `engine-v*` | `BUILDS_SYNC_TOKEN` | *Sync automation-builds* | The only way anything reaches automation-builds `main` | ⚠️ environment exists, token missing |
+| automation-maker › `sync` | `main`, tag `engine-v*` | `BUILDS_SYNC_TOKEN` | *Sync automation-builds* | The only way anything reaches automation-builds `main` | ✅ token set 2026-10-18 |
 | automation-builds › `publish` | `main` | `PACK_SIGNING_KEY` (jobs-1); later `R2_*` (upload), `BUILD_CALLBACK_SECRET`, variable `API_BASE_URL` | *Build* workflow's publish job | Signs and uploads custom apps after the secret-free build job passed | ⚠️ signing key only |
 | automation-builds › `layers` | `main` | `R2_*`, `BUILD_CALLBACK_SECRET` | Library layer builds (phase 2c) | Same split: library code runs only in jobs without secrets | 🔜 phase 2c |
 | automation-maker › `main - makemyexe-api` | — | none | Created automatically by a deploy integration (Render's deploy status) | Not ours; keep it empty | ✅ (empty) |
@@ -134,9 +134,9 @@ Repository secrets: **empty in both repos**, and they must stay empty.
 | automation-maker › **CI** | push, PR | `catalog` only in *publish catalog*, only on `main` | Tests, four Windows app builds, Runner, packs, web, Worker tests; on `main` signs and uploads the catalog | ✅ green |
 | automation-maker › **Release** | by hand, `main` | `catalog` | Signs the free set, builds the Runner and the Inno Setup installer, installs/uninstalls it on Windows, uploads `app/<version>/` and `app/latest.json` | ❌ never run on `main` (`/app/latest` says "not released yet") |
 | automation-maker › **Deploy download Worker** | by hand, `main` | `worker` | Worker tests, `wrangler deploy`, sets its secret | ✅ ran 2026-10-18 |
-| automation-maker › **Sync automation-builds** | by hand, tag `engine-v*` | `sync` | Copies `engine/ spec/ tools/ build/`, `build.yml`, `CLAUDE.md` to automation-builds `main` | ❌ never run (automation-builds `main` has no workflows yet) |
+| automation-maker › **Sync automation-builds** | by hand, tag `engine-v*` | `sync` | Copies `engine/ spec/ tools/ build/`, `build.yml`, `CLAUDE.md` to automation-builds `main` | ✅ first run 2026-10-18 (`main` at b83c50f) |
 | automation-maker › **Clean old artifacts** | by hand | none | Deletes old Actions artifacts (500 MB limit) | ✅ when needed |
-| automation-builds › **Build** | by the API (`workflow_dispatch` on `main`) | none in the build job; `publish` in the publish job | Builds and checks one custom app from `jobs/<id>/`, then signs and uploads it | ❌ arrives with the first Sync |
+| automation-builds › **Build** | by the API (`workflow_dispatch` on `main`) | none in the build job; `publish` in the publish job | Builds and checks one custom app from `jobs/<id>/`, then signs and uploads it | ⚠️ on `main` since the first Sync; not run yet (needs the routines and `publish` secrets) |
 
 ---
 

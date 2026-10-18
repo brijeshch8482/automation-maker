@@ -27,6 +27,9 @@ QMainWindow, #page {{ background: #f8fafc; }}
 #fieldLabel {{ font-weight: 600; }}
 #help {{ color: {MUTED}; font-size: 8.5pt; }}
 #fieldError {{ color: {ERROR}; font-size: 8.5pt; }}
+#notice {{ background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 6px; padding: 8px; }}
+#cardTitle {{ font-size: 11.5pt; font-weight: 600; }}
+#mono {{ font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 11pt; font-weight: 600; letter-spacing: 1px; }}
 #banner {{ background: #fff1f2; color: {ERROR}; border: 1px solid #fecdd3; border-radius: 6px; padding: 8px; }}
 #previewTitle {{ font-size: 14pt; font-weight: 600; }}
 #resultTitle {{ font-size: 14pt; font-weight: 600; color: #065f46; }}
@@ -47,6 +50,7 @@ QPushButton {{ background: white; border: 1px solid {BORDER}; border-radius: 6px
 QPushButton:hover {{ background: #f1f5f9; }}
 QPushButton#primary {{ background: {ACCENT}; color: white; border: none; font-weight: 600; padding: 8px 18px; }}
 QPushButton#primary:hover {{ background: {ACCENT_HOVER}; }}
+QPushButton#primary:disabled {{ background: #c7d2fe; color: #eef2ff; }}
 QPushButton#link {{ border: none; background: transparent; color: {ACCENT}; padding: 4px 0; text-align: left; }}
 QScrollArea {{ border: none; background: transparent; }}
 """

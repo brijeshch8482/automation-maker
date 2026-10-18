@@ -72,6 +72,10 @@ def test_release_workflow_keeps_secrets_away_from_the_windows_build():
         assert "refs/heads/main" in jobs[name]["if"]
         assert "workflow_dispatch" in jobs[name]["if"]
     assert "secrets." not in json.dumps(jobs["test-packs"])
+    # test-packs is skipped on main, so publish must not rely on the implicit success(),
+    # which checks every upstream job: it would be skipped too, and nothing would upload.
+    assert "!cancelled()" in jobs["publish"]["if"]
+    assert "needs.installer.result == 'success'" in jobs["publish"]["if"]
     triggers = RELEASE[True]
     assert set(triggers) == {"workflow_dispatch", "pull_request"}  # never on a push or a tag
 

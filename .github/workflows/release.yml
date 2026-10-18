@@ -146,7 +146,11 @@ jobs:
 
   publish:
     needs: installer
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    # !cancelled() and the explicit result: without a status function GitHub adds success(),
+    # which also looks at installer's own needs, and test-packs is always skipped on main.
+    if: >-
+      !cancelled() && needs.installer.result == 'success'
+      && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: catalog

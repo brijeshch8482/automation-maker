@@ -37,6 +37,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Sign the free set with a throwaway key
         run: |
+          mkdir -p dist
           python3 -m build.pack keygen --key-id ci-test --out "$RUNNER_TEMP/keys" --public-out dist/ci-keys.json
           PACK_SIGNING_KEY="$(cat "$RUNNER_TEMP/keys/ci-test.pem")" python3 -m build.installer packs --out dist/preinstalled --key-id ci-test --version 1.0.0 --untrusted-ok
           rm -rf "$RUNNER_TEMP/keys"

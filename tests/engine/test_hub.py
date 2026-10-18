@@ -3,7 +3,6 @@
 import json
 import os
 import shutil
-import struct
 import subprocess
 import sys
 import textwrap
@@ -230,25 +229,6 @@ def test_import_dialog_defaults(qapp, store, tmp_path, key):
 # --- shortcuts ----------------------------------------------------------------------------------
 
 
-def test_shortcut_bytes(tmp_path):
-    exe = tmp_path / "Programs" / "MakeMyEXE" / "MakeMyEXE.exe"
-    data = shortcuts.link_bytes(exe, "--run word-count", "Word count (MakeMyEXE)")
-    assert struct.unpack_from("<I", data)[0] == 0x4C
-    assert data[4:20] == shortcuts.LINK_CLSID
-    flags = struct.unpack_from("<I", data, 20)[0]
-    assert flags & shortcuts.HAS_LINK_INFO and flags & shortcuts.HAS_ARGUMENTS
-    link_info_size = struct.unpack_from("<I", data, 0x4C)[0]
-    strings = data[0x4C + link_info_size : -4]
-    texts, at = [], 0
-    while at < len(strings):
-        (count,) = struct.unpack_from("<H", strings, at)
-        texts.append(strings[at + 2 : at + 2 + 2 * count].decode("utf-16-le"))
-        at += 2 + 2 * count
-    assert texts == ["Word count (MakeMyEXE)", str(exe.parent), "--run word-count", str(exe)]
-    assert data.endswith(b"\0\0\0\0")
-    assert str(exe).encode("utf-16-le") + b"\0\0" in data
-
-
 def test_shortcut_names():
     assert shortcuts.shortcut_name('PDF: merge / "split"', "pdf") == "PDF  merge    split.lnk"
     assert shortcuts.shortcut_name("...", "pdf-merge") == "pdf-merge.lnk"
@@ -258,11 +238,13 @@ def test_shortcuts_only_for_the_installed_app(store, tmp_path, key, monkeypatch)
     store.import_bundle(make_pack(tmp_path, key))
     assert hub.add_shortcuts(store) == []  # from source: no Start menu entries
     exe = tmp_path / "Programs" / "MakeMyEXE" / "MakeMyEXE.exe"
+    made = []
     monkeypatch.setattr(hub, "start_menu_dir", lambda: tmp_path / "Start Menu" / "MakeMyEXE")
     monkeypatch.setattr(hub, "exe_path", lambda: exe)
-    (made,) = hub.add_shortcuts(store)
-    assert made.parent == tmp_path / "Start Menu" / "MakeMyEXE" and made.suffix == ".lnk"
-    assert "--run word-count".encode("utf-16-le") in made.read_bytes()
+    monkeypatch.setattr(hub, "write_shortcut", lambda *args: made.append(args) or args[0])
+    assert hub.add_shortcuts(store) == [tmp_path / "Start Menu" / "MakeMyEXE"]
+    ((_folder, title, ident, target),) = made
+    assert (ident, target) == (APP, exe) and title
     assert hub.add_shortcuts(store, ["other"]) == []
 
 

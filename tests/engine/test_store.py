@@ -390,3 +390,5 @@ def test_app_version_is_the_engine_version():
 
     project = tomllib.loads((REPO_ROOT / "engine" / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["version"] == __version__
+    # Packs are signed as tested with this version, which the store checks (§8).
+    assert build_pack.engine_version() == __version__

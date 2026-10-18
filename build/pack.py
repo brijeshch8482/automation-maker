@@ -187,8 +187,21 @@ def keygen(key_id: str, out: Path) -> tuple[Path, str]:
 
 
 def engine_version() -> str:
+    """The Runner version a pack is tested with (x.y.z): the engine release automation-builds
+    was synced from (ENGINE_VERSION, "engine-v1.0.0 <commit>"), else engine/pyproject.toml."""
     marker = REPO_ROOT / "ENGINE_VERSION"
-    return marker.read_text(encoding="utf-8").split()[0] if marker.is_file() else "dev"
+    if marker.is_file():
+        text = marker.read_text(encoding="utf-8")
+    else:
+        project = REPO_ROOT / "engine" / "pyproject.toml"
+        found = re.search(
+            r'^version = "([^"]+)"',
+            project.read_text(encoding="utf-8") if project.is_file() else "",
+            re.M,
+        )
+        text = found.group(1) if found else ""
+    match = re.search(r"\d+\.\d+\.\d+", text)
+    return match.group(0) if match else "dev"
 
 
 def main(argv: list[str] | None = None) -> int:

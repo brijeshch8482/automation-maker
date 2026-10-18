@@ -2,6 +2,8 @@
 
 Internal phase hosting from [ARCHITECTURE.md §6.1](ARCHITECTURE.md): **Supabase** (Postgres + login), **Render** (the API, Docker), **Cloudflare Pages** (the website) and **cron-job.org** (keeps the API awake). Everything here costs ₹0.
 
+What each service, secret and key is for, why we use it, and its current status: [RESOURCES.md](RESOURCES.md).
+
 > **Secrets go only into the Supabase, Render and Cloudflare dashboards.** Never commit them, never put them in a file in this repo, and never paste them into a chat (including with Claude). If one leaks, rotate it in the dashboard it came from.
 
 Do the steps in this order; later steps need values from earlier ones.

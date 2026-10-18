@@ -13,10 +13,8 @@ from build import pack as build_pack
 from engine import store as store_mod
 from engine.pack import PackError
 from engine.store import AppStore, StoreSettings
+from tests.bundles import APP, make_bundle, make_layer, make_pack, rewrite_zip
 from tests.conftest import REPO_ROOT
-
-FIXTURE = REPO_ROOT / "tests" / "fixtures" / "jobs" / "word-count"
-APP = "word-count"
 
 pytestmark = pytest.mark.skipif(shutil.which("openssl") is None, reason="needs the openssl CLI")
 
@@ -37,56 +35,6 @@ def other_key(tmp_path_factory):
 @pytest.fixture
 def store(tmp_path, key):
     return AppStore(tmp_path / "MakeMyEXE", {"test-1": key[1]})
-
-
-def make_layer(root: Path, name="tinylib-1.0", value=b"VALUE = 42\n") -> tuple[Path, dict]:
-    folder = root / name
-    (folder / "tinylib").mkdir(parents=True)
-    (folder / "tinylib" / "__init__.py").write_bytes(value)
-    record = {"tinylib/__init__.py": hashlib.sha256(value).hexdigest()}
-    (folder / "RECORD.json").write_bytes(json.dumps(record).encode())
-    dist, version = name.rsplit("-", 1)
-    digest = hashlib.sha256((folder / "RECORD.json").read_bytes()).hexdigest()
-    return folder, {"dist": dist, "version": version, "record_sha256": digest}
-
-
-def make_pack(tmp: Path, key, version="1.0.0", layers=(), tested_with="1.0.0", pem=None) -> Path:
-    app = tmp / f"app-{version}-{len(list(tmp.glob('app-*')))}"
-    shutil.copytree(FIXTURE, app)
-    spec = json.loads((app / "spec.json").read_text(encoding="utf-8"))
-    spec["version"] = version
-    (app / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
-    return build_pack.make_pack(
-        app, app / "out", "job", "test-1", pem or key[0], tested_with, layers=list(layers)
-    )
-
-
-def make_bundle(target: Path, pack_files: list[Path], layers: list[Path] = (), **toc) -> Path:
-    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
-        names = []
-        for i, pack in enumerate(pack_files):
-            names.append(f"packs/app-{i}.mmx")
-            z.write(pack, names[-1])
-        for folder in layers:
-            for path in sorted(folder.rglob("*")):
-                if path.is_file():
-                    z.write(path, f"layers/{folder.name}/{path.relative_to(folder).as_posix()}")
-        data = {"format": 2, "packs": names, "layers": [f.name for f in layers], "licenses": []}
-        z.writestr("bundle.json", json.dumps({**data, **toc}))
-    return target
-
-
-def rewrite_zip(source: Path, target: Path, change) -> Path:
-    """Copy entry by entry; change(name, data) returns new data, None to drop, or a dict to add."""
-    with zipfile.ZipFile(source) as src, zipfile.ZipFile(target, "w") as dst:
-        for info in src.infolist():
-            data = change(info.filename, src.read(info))
-            if isinstance(data, dict):
-                for name, extra in data.items():
-                    dst.writestr(name, extra)
-            elif data is not None:
-                dst.writestr(info.filename, data)
-    return target
 
 
 def store_files(store: AppStore) -> list[str]:
@@ -442,3 +390,5 @@ def test_app_version_is_the_engine_version():
 
     project = tomllib.loads((REPO_ROOT / "engine" / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["version"] == __version__
+    # Packs are signed as tested with this version, which the store checks (§8).
+    assert build_pack.engine_version() == __version__

@@ -6,8 +6,10 @@
 Stages: package (PyInstaller --onedir of build/entry.py with every block module and every
 module custom code may import, then trim Qt), refuse_spec (the Runner must refuse a plain
 spec.json), packs (each --check-pack placed next to a copy of the Runner: smoke test on its
-sample_data, plus a tampered copy that must be refused), launch_check (opens the real window
-from the first pack; needs a desktop). Writes <out>/report.json with the sizes; exit 0 when
+sample_data, plus a tampered copy that must be refused), hub (the installed app: the Hub imports
+the first pack into a fresh store, --run smoke-tests it from there, and a changed install or a
+changed file must be refused), launch_check (opens the real window from the first pack; needs a
+desktop). Writes <out>/report.json with the sizes; exit 0 when
 every stage passed.
 
 The Runner trusts the public keys in build/trusted_keys.json. --extra-keys adds keys for one
@@ -51,7 +53,7 @@ RUNNER_MODULES = sorted(
     {m.split(":")[0] for m in IMPLEMENTATIONS.values()}
     | (CODE_MODULES - {"__future__"})
     | NETWORK_MODULES
-    | {"engine.custom_api", "engine.testing"}
+    | {"engine.custom_api", "engine.testing", "engine.hub", "engine.ui.hub"}
 )
 THIRD_PARTY = ("PIL", "pypdf", "fpdf", "pillow_heif")
 TAMPERED_MESSAGE = "was changed after MakeMyEXE made it"
@@ -113,6 +115,8 @@ class RunnerBuild:
             folder = self._stage("package", self._package)
             self._stage("refuse_spec", lambda: self._refuse_spec(folder))
             self._stage("packs", lambda: self._check_packs(folder))
+            if self.packs:
+                self._stage("hub", lambda: self._check_hub(folder))
             if self.launch_check and self.packs:
                 self._stage("launch_check", lambda: self._launch_check(folder))
             self._stage("zip", lambda: self._zip(folder))
@@ -184,7 +188,12 @@ class RunnerBuild:
 
     def _exe(self, stage: str, exe: Path, args: list[str], qt: str | None = "offscreen"):
         result = exe.parent / f"{stage}-result.json"
-        env = {"MAKEMYEXE_DATA_DIR": str(self.work / "appdata"), "QT_QPA_PLATFORM": qt}
+        env = {
+            "MAKEMYEXE_DATA_DIR": str(self.work / "appdata"),
+            "MAKEMYEXE_STORE_DIR": str(self.work / "store"),
+            "APPDATA": str(self.work / "roaming"),  # Start menu shortcuts land here, not on CI
+            "QT_QPA_PLATFORM": qt,
+        }
         failure: StageFailed | None = None
         try:
             run(stage, [str(exe), *args, "--report", str(result)], self.log, env)
@@ -221,6 +230,36 @@ class RunnerBuild:
             if not entry["tampered_refused"]:
                 raise StageFailed("packs", "Runner with a changed app.mmx", json.dumps(report))
             self.report.packs.append(entry)
+
+    def _check_hub(self, folder: Path) -> None:
+        """The installed app (docs/DESKTOP_APP.md): import into the store, run from it."""
+        exe, pack = exe_path(folder), self.packs[0]
+        qt = None if self.launch_check else "offscreen"
+        args = ["--hub", "--import", str(pack), "--launch-check"]
+        code, report, failure = self._exe("hub-import", exe, args, qt=qt)
+        if code != 0 or report.get("status") != "passed" or len(report.get("imported", [])) != 1:
+            raise StageFailed("hub", "Runner --hub --import --launch-check", _tail(failure, report))
+        automation = report["imported"][0].split("@")[0]
+        start_menu = self.work / "roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+        if sys.platform == "win32" and not list(start_menu.glob(f"{NAME}/*.lnk")):
+            raise StageFailed("hub", "Runner --hub --import", "no Start menu shortcut was made")
+        code, report, failure = self._exe("hub-run", exe, ["--run", automation, "--smoke-test"])
+        if code != 0 or report.get("status") != "passed":
+            raise StageFailed("hub", "Runner --run --smoke-test", _tail(failure, report))
+
+        installed = next((self.work / "store" / "store" / "automations" / automation).iterdir())
+        spec = installed / "spec.json"
+        original = spec.read_bytes()
+        spec.write_bytes(original + b" ")
+        code, report, _ = self._exe("hub-run-changed", exe, ["--run", automation, "--smoke-test"])
+        spec.write_bytes(original)
+        if code == 0 or "was changed" not in str(report.get("error")):
+            raise StageFailed("hub", "Runner --run with a changed install", json.dumps(report))
+        changed = _tamper(pack, self.work / "hub-tampered.mmx")
+        args = ["--hub", "--import", str(changed), "--launch-check"]
+        code, report, _ = self._exe("hub-import-changed", exe, args)
+        if code == 0 or TAMPERED_MESSAGE not in str(report.get("error")):
+            raise StageFailed("hub", "Runner --hub --import of a changed file", json.dumps(report))
 
     def _launch_check(self, folder: Path) -> None:
         exe = exe_path(self.work / "apps" / "app-0")

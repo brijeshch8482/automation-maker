@@ -24,9 +24,10 @@ import shutil
 import sys
 import tempfile
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any
 
 from engine import ed25519
 from engine.errors import EngineError
@@ -76,36 +77,68 @@ def verify_pack(
     pack_path: Path, trusted_keys: dict[str, bytes], app_dir: Path | None = None
 ) -> VerifiedPack:
     """Open and fully verify a pack. `app_dir` holds libs/ (default: the pack's folder)."""
+    manifest, files = verify_pack_file(pack_path, trusted_keys)
+    layer_dirs = verify_layers(manifest, (app_dir or Path(pack_path).parent) / "libs")
+    return VerifiedPack(manifest, files, layer_dirs)
+
+
+def verify_pack_file(
+    pack: Path | IO[bytes], trusted_keys: dict[str, bytes]
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """Checks 1-3 on a pack zip (a path, or a file object inside a bundle): manifest + files."""
     try:
-        archive = zipfile.ZipFile(pack_path)
+        archive = zipfile.ZipFile(pack)
     except FileNotFoundError as err:
         raise PackError("This folder is incomplete. Download the app again.") from err
     except (OSError, zipfile.BadZipFile) as err:
         raise PackError(TAMPERED) from err
     with archive:
         entries = {info.filename: info for info in archive.infolist() if not info.is_dir()}
-        if MANIFEST not in entries or SIGNATURE not in entries:
-            raise PackError(TAMPERED)
-        if len(entries) > MAX_FILES + 2:
-            raise PackError(TAMPERED)
-        if sum(info.file_size for info in entries.values()) > MAX_PACK_BYTES:
-            raise PackError(TAMPERED)
-        manifest_bytes = archive.read(MANIFEST)
-        signature = archive.read(SIGNATURE)
-        manifest = _check_signature(manifest_bytes, signature, trusted_keys)
-        listed: dict[str, str] = manifest["files"]
-        if set(entries) != set(listed) | {MANIFEST, SIGNATURE}:
-            raise PackError(TAMPERED)
-        files = {}
-        for name, expected in listed.items():
-            data = archive.read(name)
-            if sha256(data) != expected:
-                raise PackError(TAMPERED)
-            files[name] = data
+        sizes = sum(info.file_size for info in entries.values())
+        return _verify_contents(set(entries), sizes, archive.read, trusted_keys)
 
+
+def verify_pack_dir(
+    folder: Path, trusted_keys: dict[str, bytes]
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """Checks 1-3 on an unpacked pack in the store (engine/store.py): the same rules as a zip."""
+    try:
+        paths = [p for p in folder.rglob("*") if p.is_file() or p.is_symlink()]
+    except OSError as err:
+        raise PackError(TAMPERED) from err
+    if any(p.is_symlink() for p in paths):
+        raise PackError(TAMPERED)
+    names = {p.relative_to(folder).as_posix() for p in paths}
+    sizes = sum(p.stat().st_size for p in paths)
+
+    def read(name: str) -> bytes:
+        return folder.joinpath(*PurePosixPath(name).parts).read_bytes()
+
+    return _verify_contents(names, sizes, read, trusted_keys)
+
+
+def _verify_contents(
+    names: set[str],
+    total_size: int,
+    read: Callable[[str], bytes],
+    trusted_keys: dict[str, bytes],
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    if MANIFEST not in names or SIGNATURE not in names:
+        raise PackError(TAMPERED)
+    if len(names) > MAX_FILES + 2 or total_size > MAX_PACK_BYTES:
+        raise PackError(TAMPERED)
+    manifest = _check_signature(read(MANIFEST), read(SIGNATURE), trusted_keys)
+    listed: dict[str, str] = manifest["files"]
+    if names != set(listed) | {MANIFEST, SIGNATURE}:
+        raise PackError(TAMPERED)
+    files = {}
+    for name, expected in listed.items():
+        data = read(name)
+        if sha256(data) != expected:
+            raise PackError(TAMPERED)
+        files[name] = data
     _check_spec(manifest, files)
-    layer_dirs = verify_layers(manifest, app_dir or Path(pack_path).parent)
-    return VerifiedPack(manifest, files, layer_dirs)
+    return manifest, files
 
 
 def _check_signature(
@@ -147,42 +180,79 @@ def _check_spec(manifest: dict[str, Any], files: dict[str, bytes]) -> None:
         raise PackError(TAMPERED)
 
 
-def verify_layers(manifest: dict[str, Any], app_dir: Path) -> list[Path]:
-    """Check every pinned layer folder against its RECORD.json and the signed manifest."""
-    dirs = []
+def layer_pins(manifest: dict[str, Any]) -> list[tuple[str, str]]:
+    """(folder name, RECORD.json sha256) for every layer a signed manifest pins."""
+    pins = []
     for layer in manifest["layers"]:
         try:
             name = f"{layer['dist']}-{layer['version']}"
             expected_record = layer["record_sha256"]
         except (KeyError, TypeError) as err:
             raise PackError(TAMPERED) from err
-        if not LAYER_NAME.match(name):
+        if not LAYER_NAME.match(name) or not isinstance(expected_record, str):
             raise PackError(TAMPERED)
-        folder = app_dir / "libs" / name
-        record_path = folder / "RECORD.json"
-        try:
-            record_bytes = record_path.read_bytes()
-        except OSError as err:
-            raise PackError("This folder is incomplete. Download the app again.") from err
-        if sha256(record_bytes) != expected_record:
-            raise PackError(TAMPERED)
-        try:
-            record: dict[str, str] = json.loads(record_bytes)
-        except ValueError as err:
-            raise PackError(TAMPERED) from err
-        present = {
-            p.relative_to(folder).as_posix()
-            for p in folder.rglob("*")
-            if p.is_file() or p.is_symlink()
-        } - {"RECORD.json"}
-        if present != set(record):
-            raise PackError(TAMPERED)
-        for rel, digest in record.items():
-            path = folder.joinpath(*PurePosixPath(rel).parts)
-            if path.is_symlink() or sha256(path.read_bytes()) != digest:
-                raise PackError(TAMPERED)
-        dirs.append(folder)
+        pins.append((name, expected_record))
+    return pins
+
+
+def verify_layers(manifest: dict[str, Any], libs_dir: Path) -> list[Path]:
+    """Check every pinned layer folder in `libs_dir` against its RECORD.json and the manifest."""
+    dirs = []
+    for name, expected_record in layer_pins(manifest):
+        verify_layer(libs_dir / name, expected_record)
+        dirs.append(libs_dir / name)
     return dirs
+
+
+def verify_layer(folder: Path, expected_record: str) -> None:
+    """A layer folder holds exactly the files its RECORD.json lists, with those hashes."""
+    try:
+        record_bytes = (folder / "RECORD.json").read_bytes()
+    except OSError as err:
+        raise PackError("This folder is incomplete. Download the app again.") from err
+    if sha256(record_bytes) != expected_record:
+        raise PackError(TAMPERED)
+    record = parse_record(record_bytes)
+    present = {
+        p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file() or p.is_symlink()
+    } - {"RECORD.json"}
+    if present != set(record):
+        raise PackError(TAMPERED)
+    for rel, digest in record.items():
+        path = folder.joinpath(*PurePosixPath(rel).parts)
+        if path.is_symlink() or file_sha256(path) != digest:
+            raise PackError(TAMPERED)
+
+
+def parse_record(record_bytes: bytes) -> dict[str, str]:
+    """RECORD.json: {relative posix path: sha256}. Paths must stay inside the layer folder."""
+    try:
+        record = json.loads(record_bytes)
+    except ValueError as err:
+        raise PackError(TAMPERED) from err
+    if not isinstance(record, dict) or not all(
+        isinstance(k, str) and safe_relative(k) and isinstance(v, str) for k, v in record.items()
+    ):
+        raise PackError(TAMPERED)
+    return record
+
+
+def safe_relative(name: str) -> bool:
+    parts = name.split("/")
+    return (
+        bool(name)
+        and name != "RECORD.json"
+        and all(part not in ("", ".", "..") for part in parts)
+        and not any(c in name for c in '\\:*?"<>|\0')
+    )
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        while chunk := fh.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def started_from_zip(exe: Path) -> bool:
@@ -194,9 +264,13 @@ def load_pack(
     pack_path: Path, trusted_keys: dict[str, bytes], app_dir: Path | None = None
 ) -> LoadedSpec:
     """Verify a pack, make its layers importable, unpack it, and load its spec."""
+    return load_verified(verify_pack(pack_path, trusted_keys, app_dir))
+
+
+def load_verified(pack: VerifiedPack) -> LoadedSpec:
+    """Run a verified pack from our own temp copy, so nothing can change it after the check."""
     from engine.loader import load_spec
 
-    pack = verify_pack(pack_path, trusted_keys, app_dir)
     for folder in pack.layer_dirs:
         if str(folder) not in sys.path:
             sys.path.append(str(folder))

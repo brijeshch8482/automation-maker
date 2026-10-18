@@ -11,7 +11,10 @@ from the first pack; needs a desktop). Writes <out>/report.json with the sizes; 
 every stage passed.
 
 The Runner trusts the public keys in build/trusted_keys.json. --extra-keys adds keys for one
-build (CI signs its test packs with a throwaway key); a release never passes it.
+build (CI signs its test packs with a throwaway key). --release-out then writes the copy that may
+be published: the same tested folder with its trusted_keys.json put back to the committed keys
+only, checked to refuse a pack signed with the extra key (stage release). Its version is the
+engine package's (the Runner version is the engine version, ARCHITECTURE.md §8.7).
 """
 
 from __future__ import annotations
@@ -86,7 +89,12 @@ def exe_path(folder: Path) -> Path:
 
 class RunnerBuild:
     def __init__(
-        self, out: Path, extra_keys: Path | None, packs: list[Path], launch_check: bool
+        self,
+        out: Path,
+        extra_keys: Path | None,
+        packs: list[Path],
+        launch_check: bool,
+        release_out: Path | None = None,
     ) -> None:
         self.out = out.resolve()
         self.work = self.out / "work"
@@ -94,7 +102,8 @@ class RunnerBuild:
         self.extra_keys = extra_keys
         self.packs = [p.resolve() for p in packs]
         self.launch_check = launch_check
-        self.report = RunnerReport(version=engine_version())
+        self.release_out = release_out.resolve() if release_out else None
+        self.report = RunnerReport(version=runner_version())
 
     def run(self) -> RunnerReport:
         if self.out.exists():
@@ -107,6 +116,8 @@ class RunnerBuild:
             if self.launch_check and self.packs:
                 self._stage("launch_check", lambda: self._launch_check(folder))
             self._stage("zip", lambda: self._zip(folder))
+            if self.release_out:
+                self._stage("release", lambda: self._release(folder))
             self.report.status = "passed"
         except StageFailed as err:
             self.report.stage, self.report.command = err.stage, err.command
@@ -217,12 +228,15 @@ class RunnerBuild:
         if code != 0 or report.get("status") != "passed":
             raise StageFailed("launch_check", "Runner --launch-check", _tail(failure, report))
 
-    def _zip(self, folder: Path) -> Path:
-        target = self.out / f"{NAME}-runner-{self.report.version}.zip"
+    def _zip(self, folder: Path, out: Path | None = None) -> Path:
+        target = (out or self.out) / f"{NAME}-runner-{self.report.version}.zip"
+        target.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             for path in sorted(folder.rglob("*")):
                 if path.is_file():
                     archive.write(path, path.relative_to(folder))
+        if out is not None:
+            return target
         self.report.sizes_mb["zip"] = round(target.stat().st_size / 1_000_000, 1)
         self.report.over_budget = [
             f"{part}: {self.report.sizes_mb[part]} MB > {limit} MB"
@@ -230,6 +244,41 @@ class RunnerBuild:
             if self.report.sizes_mb.get(part, 0) > limit
         ]
         return target
+
+    def _release(self, folder: Path) -> None:
+        """The publishable copy: committed keys only, proven to refuse an extra-key pack."""
+        release = self.work / "release" / NAME
+        shutil.copytree(folder, release, symlinks=True)
+        (keys_file,) = release.rglob("trusted_keys.json")
+        committed = merged_keys(None)
+        keys_file.write_text(json.dumps(committed, indent=2), encoding="utf-8")
+        if self.extra_keys and self.packs:
+            extra = set(merged_keys(self.extra_keys)) - set(committed)
+            with zipfile.ZipFile(self.packs[0]) as pack:
+                signed_by = json.loads(pack.read("manifest.json"))["key_id"]
+            if signed_by in extra:
+                shutil.copy2(self.packs[0], release / "app.mmx")
+                code, report, _ = self._exe("release", exe_path(release), ["--smoke-test"])
+                (release / "app.mmx").unlink()
+                for leftover in release.glob("release-result.json"):
+                    leftover.unlink()
+                if code == 0 or TAMPERED_MESSAGE not in str(report.get("error")):
+                    raise StageFailed(
+                        "release", "release Runner with a CI-signed pack", json.dumps(report)
+                    )
+        self._zip(release, self.release_out)
+        info = {"name": NAME, "version": self.report.version, "trusted_keys": sorted(committed)}
+        (self.release_out / "release.json").write_text(json.dumps(info, indent=2))
+
+
+def runner_version() -> str:
+    """The engine package's version: the Runner version is the engine version."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("makemyexe-engine")
+    except PackageNotFoundError:
+        return engine_version()
 
 
 def largest_parts(folder: Path, count: int = 25) -> dict[str, float]:
@@ -271,8 +320,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--extra-keys", type=Path, help="trust these keys too (CI test packs)")
     parser.add_argument("--check-pack", type=Path, action="append", default=[], metavar="MMX")
     parser.add_argument("--launch-check", action="store_true", help="needs a desktop")
+    parser.add_argument(
+        "--release-out", type=Path, help="also write the publishable copy (committed keys only)"
+    )
     args = parser.parse_args(argv)
-    report = RunnerBuild(args.out, args.extra_keys, args.check_pack, args.launch_check).run()
+    report = RunnerBuild(
+        args.out, args.extra_keys, args.check_pack, args.launch_check, args.release_out
+    ).run()
     keys = ("status", "stage", "packs", "sizes_mb", "over_budget", "largest_mb")
     print(json.dumps({k: getattr(report, k) for k in keys}, indent=2))
     if report.status != "passed":

@@ -173,7 +173,7 @@ Finished apps live in a **private** R2 bucket. Nobody gets a public link to it: 
 1. **Bucket.** If you didn't make it in section 5: Cloudflare › R2 › Create bucket `makemyexe-builds`, public access **off**. R2 is free up to 10 GB of storage, and downloads from it cost nothing.
 2. **Upload token** (GitHub Actions only). R2 › Manage API tokens › Create API token `makemyexe-publish`: **Object Read & Write**, that bucket only. First create the **`catalog` environment** in automation-maker (Settings › Environments › New environment `catalog` › Selected branches and tags › add branch rule `main` › Save). Then add four environment secrets there, never as repository secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (`makemyexe-builds`). The same four values go into the automation-builds `publish` environment (section 5, step 6).
 3. **Read-only token** (the API only). Create a second token `makemyexe-api`: **Object Read only**, that bucket only. Put its values into **Render** › the API service › Environment: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. The API can then sign download links, but can never change or delete a file.
-4. **First release.** CI publishes the catalog on every push to `main` (job *publish catalog*, after the tests and the four Windows builds pass): `catalog/<id>/<version>/<App>.zip`, `Guide.pdf`, and last `catalog/manifest.json`. After adding the secrets to the `catalog` environment, open the latest CI run on `main` › **Re-run all jobs**, or merge the next PR.
+4. **First release.** CI publishes the catalog on every push to `main` (job *publish catalog*, after the tests, the four Windows builds and the Runner pass): `catalog/<id>/<version>/<App>.zip`, `Guide.pdf`; with the signing key (§9) also `runner/<version>/` and `packs/catalog/<id>/<version>/` (zip blocks for the Worker, §11); and last `catalog/manifest.json`. After adding the secrets to the `catalog` environment, open the latest CI run on `main` › **Re-run all jobs**, or merge the next PR.
 5. **Check.** Open the site › any automation. Within five minutes of a release the button shows the size and version, for example "51 MB · version 1.0.0". Click it: the zip downloads, and the page shows the three steps to start the app. A custom app that finished building shows the same buttons on its page.
 
 ## 7. Custom apps (Claude routines)
@@ -216,7 +216,7 @@ If a job fails, its page shows why, and each attempt links to its routine sessio
 
 ## 9. Pack signing keys (Runner + packs, Phase 2b)
 
-Apps are delivered as signed packs, and the Runner runs only packs signed with a key it trusts. There are two keys: **catalog** (ready-made apps, automation-maker) and **jobs** (custom apps, automation-builds). Nothing needs them until packs are published (Phase 2b part 2), but they can be made now. The private halves go only into GitHub environments, never into the repo or a chat. The public halves are public: they go into `build/trusted_keys.json`.
+Apps are delivered as signed packs, and the Runner runs only packs signed with a key it trusts. There are two keys: **catalog** (ready-made apps, automation-maker) and **jobs** (custom apps, automation-builds). CI's *publish catalog* job signs the catalog packs with the first one; until it's set up, that job only publishes the per-app zips and says so in its log. The private halves go only into GitHub environments, never into the repo or a chat. The public halves are public: they go into `build/trusted_keys.json`.
 
 1. **Make the key pairs** on your own computer (Git Bash on Windows, or a terminal on Mac/Linux; needs `openssl`):
    ```bash
@@ -229,14 +229,16 @@ Apps are delivered as signed packs, and the Runner runs only packs signed with a
    - automation-maker › environment `catalog` › secret `PACK_SIGNING_KEY` = the whole contents of `catalog-1.pem`, from `-----BEGIN PRIVATE KEY-----` through `-----END PRIVATE KEY-----`;
    - automation-builds › environment `publish` › secret `PACK_SIGNING_KEY` = the contents of `jobs-1.pem`.
 3. **Public halves into the repo:** add `"catalog-1": "<hex>"` and `"jobs-1": "<hex>"` to `build/trusted_keys.json` in a PR, or send me the two hex lines: they're public, so they may be shared.
-4. **Delete the `.pem` files** from your computer, or keep them offline (on a USB stick, say) in case you need them. A lost key just means a new key id (`catalog-2`) and a Runner release.
+   The key ids are `catalog-1` and `jobs-1` by default. If you use another id, set the environment **variable** `PACK_KEY_ID` (not a secret) to it, in the same environment as its key.
+4. **Check.** After the PR with the public keys is merged, the *publish catalog* log on `main` says `uploaded runner/<version>` and `uploaded packs/catalog/<id>/<version>` for each app. If the private key in the environment doesn't match `build/trusted_keys.json`, it publishes no packs and prints the public key that belongs to it, so you can compare or add it. A published Runner trusts only the committed keys: CI's own throwaway test key is removed and checked to be refused before the Runner is uploaded.
+5. **Delete the `.pem` files** from your computer, or keep them offline (on a USB stick, say) in case you need them. A lost key just means a new key id (`catalog-2`) and a Runner release.
 
 ## 10. Staying inside the free storage
 
 | Where | Free limit | What keeps us inside it |
 |---|---|---|
 | GitHub Actions artifacts (private repos, GitHub Free) | **500 MB in all**; once it's full, Actions usage is blocked until old artifacts go | Every upload expires in at most 7 days (a test checks this). App, custom-app and Runner zips are kept only on `main`, where *publish catalog* takes them minutes later; a PR keeps only `report.json` (3 days). Signed packs between jobs: 1 day. automation-builds build artifacts: 3 days. |
-| Cloudflare R2 | 10 GB-month, free egress | Runner + packs (Phase 2b): one Runner per version, packs are KB. Lifecycle rules (Phase 2b part 2): custom apps deleted after 14 days (the spec can be rebuilt), the latest 2 catalog versions kept. |
+| Cloudflare R2 | 10 GB-month, free egress | One Runner (~50 MB) per version, shared by every app; packs are KB. The per-app zips (internal testing) are the big part. Lifecycle rules below delete custom apps after 14 days (the spec can be rebuilt); old catalog versions are deleted by hand (keep the latest 2). |
 | Supabase | 500 MB database | Specs are a few KB; descriptions are deleted after 30 days. |
 
 **If GitHub storage fills up anyway:**
@@ -245,9 +247,18 @@ Apps are delivered as signed packs, and the Runner runs only packs signed with a
 
 The workflow runs only when started by hand and uses only the run's own `GITHUB_TOKEN`. GitHub counts storage as an average over the month, so the usage figure in Settings › Billing drops over the following days, not at once.
 
+**R2 lifecycle rules** (once, in the dashboard): Cloudflare › R2 › `makemyexe-builds` › Settings › Object lifecycle rules › Add rule. Make one rule per prefix, each **Delete objects** after **14 days**:
+
+| Rule name | Prefix | What it holds |
+|---|---|---|
+| `jobs-14d` | `jobs/` | custom-app zips and guides (automation-builds) |
+| `job-packs-14d` | `packs/jobs/` | custom-app packs (Phase 2b, from automation-builds) |
+
+Never add a rule for `catalog/`, `packs/catalog/` or `runner/`: the manifest points at those, and a deleted Runner breaks every download. After 14 days a custom app's download link stops working; its spec stays in the database, so it can be built again. Old catalog versions: R2 › the bucket › browse `catalog/<id>/`, `packs/catalog/<id>/` and `runner/`, and delete all but the latest two version folders. Check the usage figure on the bucket's Metrics tab now and then.
+
 ## 11. Download Worker (Runner + packs, Phase 2b)
 
-The Worker `makemyexe-download` joins the Runner, library layers and an app pack from R2 into one zip at download time (`worker/`, ARCHITECTURE.md §8.6). It's off until these steps are done. The API only uses it for apps that have a signed pack in the catalog manifest (Phase 2b part 2 publishing); everything else keeps the direct zip link from §6.
+The Worker `makemyexe-download` joins the Runner, library layers and an app pack from R2 into one zip at download time (`worker/`, ARCHITECTURE.md §8.6). It's off until these steps are done. The API only uses it for apps that have a signed pack in the catalog manifest (published once §9 is done); everything else keeps the direct zip link from §6. The per-app zip stays published for internal testing either way.
 
 1. **A shared secret.** Make one random value (for example `openssl rand -hex 32`). It goes into two places only: Render and the GitHub environment in step 3. Not into the repo or a chat.
 2. **Cloudflare API token.** Cloudflare › My Profile › API Tokens › Create Token:

@@ -300,6 +300,16 @@ def test_runner_accepts_only_packs(monkeypatch, tmp_path):
         cli._load(tmp_path / "app.mmx")
 
 
+def test_installed_runner_without_arguments_opens_the_hub(monkeypatch, tmp_path):
+    # The Start menu shortcut starts MakeMyEXE.exe with no arguments and no app.mmx beside it.
+    monkeypatch.setattr(cli, "is_runner", lambda: True)
+    monkeypatch.setattr(cli.sys, "executable", str(tmp_path / "MakeMyEXE" / "MakeMyEXE.exe"))
+    opened = []
+    monkeypatch.setattr(cli, "_hub", lambda args: opened.append(args) or 0)
+    assert cli.main([]) == 0
+    assert len(opened) == 1 and opened[0].hub and opened[0].spec is None
+
+
 def test_started_from_zip():
     assert started_from_zip(
         Path("C:/Users/a/AppData/Local/Temp/Temp1_MakePDF.zip/MakePDF/MakePDF.exe")

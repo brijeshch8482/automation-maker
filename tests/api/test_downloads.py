@@ -204,3 +204,20 @@ def test_tokens_name_only_known_prefixes():
     ):
         with pytest.raises(ValueError):
             download_token("s", **{**good, **bad})
+
+
+def test_r2_account_id_also_accepts_the_endpoint_url():
+    from api.config import Settings
+    from build.publish import r2_account_id
+
+    bare = "0123456789abcdef0123456789abcdef"  # obviously fake
+    for value in (
+        bare,
+        f" {bare} ",
+        f"https://{bare}.r2.cloudflarestorage.com",
+        f"https://{bare}.r2.cloudflarestorage.com/",
+        f"{bare}.r2.cloudflarestorage.com",
+        bare.upper(),
+    ):
+        assert r2_account_id(value) == bare, value
+        assert Settings(_env_file=None, r2_account_id=value).r2_account_id == bare, value

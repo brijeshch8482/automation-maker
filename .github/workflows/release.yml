@@ -1,0 +1,166 @@
+# The MakeMyEXE app release (docs/DESKTOP_APP.md §9, docs/DEPLOY.md §12).
+#
+# Run by hand on main (Actions > Release > Run workflow): signs the free set with the catalog
+# key, builds the Runner and the per-user installer on Windows (no secrets there), installs it,
+# runs it and uninstalls it, then uploads it to R2 as app/<version>/ + app/latest.json.
+# A pull request that touches the installer runs the same build and check with a throwaway key
+# and publishes nothing.
+name: Release
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - installer/**
+      - build/installer.py
+      - build/runner.py
+      - engine/src/engine/hub.py
+      - engine/src/engine/shortcuts.py
+      - engine/src/engine/store.py
+      - engine/src/engine/ui/hub.py
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Pull requests: the free set signed with a key made for this run and thrown away.
+  test-packs:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sign the free set with a throwaway key
+        run: |
+          python3 -m build.pack keygen --key-id ci-test --out "$RUNNER_TEMP/keys" --public-out dist/ci-keys.json
+          PACK_SIGNING_KEY="$(cat "$RUNNER_TEMP/keys/ci-test.pem")" python3 -m build.installer packs --out dist/preinstalled --key-id ci-test --version 1.0.0 --untrusted-ok
+          rm -rf "$RUNNER_TEMP/keys"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preinstalled
+          path: dist/
+          retention-days: 1
+
+  # The release: the catalog key, which build/trusted_keys.json must already trust.
+  catalog-packs:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: catalog
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            build
+            engine
+            automations
+      - name: Sign the free set
+        env:
+          PACK_SIGNING_KEY: ${{ secrets.PACK_SIGNING_KEY }}
+          PACK_KEY_ID: ${{ vars.PACK_KEY_ID }}
+        run: python3 -m build.installer packs --out dist/preinstalled --version "$(sed -n 's/^version = "\(.*\)"/\1/p' engine/pyproject.toml)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preinstalled
+          path: dist/
+          retention-days: 1
+
+  # Generated code never runs here, and neither do secrets: this job names no environment.
+  installer:
+    needs: [test-packs, catalog-packs]
+    if: always() && (needs.test-packs.result == 'success' || needs.catalog-packs.result == 'success')
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install (engine and PyInstaller only)
+        run: |
+          uv sync --locked --no-dev --package makemyexe-engine
+          uv sync --locked --no-dev --only-group build --inexact
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: preinstalled
+          path: free
+
+      - name: Build the Runner and check the free set in it
+        run: |
+          args=()
+          for pack in free/preinstalled/*.mmx; do args+=(--check-pack "$pack"); done
+          if [ -f free/ci-keys.json ]; then args+=(--extra-keys free/ci-keys.json); fi
+          uv run --no-sync python -m build.runner --out dist/runner --launch-check --release-out dist/runner-release "${args[@]}"
+
+      - name: Inno Setup
+        run: |
+          if [ ! -f "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then choco install innosetup -y --no-progress; fi
+
+      # A pull request's free set is signed with the throwaway key, so it goes with the tested
+      # Runner that trusts it; a release takes the release copy (committed keys only).
+      - name: Build the installer
+        run: |
+          runner=dist/runner/work/release/MakeMyEXE
+          if [ -f free/ci-keys.json ]; then runner=dist/runner/work/dist/MakeMyEXE; fi
+          uv run --no-sync python -m build.installer make --runner "$runner" --preinstalled free/preinstalled --out dist/installer
+
+      - name: Install, run every automation, open a .mmx, uninstall twice
+        run: |
+          ids=(); for pack in free/preinstalled/*.mmx; do ids+=("$(basename "$pack" .mmx)"); done
+          uv run --no-sync python -m build.installer check dist/installer/MakeMyEXE-Setup-*.exe --expect "${ids[@]}" --out dist/installer-check
+
+      - name: Upload the check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-check
+          path: |
+            dist/installer-check/
+            dist/runner/report.json
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Upload the installer (release)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/installer/MakeMyEXE-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    needs: installer
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: catalog
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: build
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: installer-artifact
+      - name: Upload to R2 (app/<version>/, then app/latest.json)
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python3 -m build.installer publish installer-artifact/MakeMyEXE-Setup-*.exe

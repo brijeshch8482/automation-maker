@@ -89,3 +89,62 @@ test("a ready custom app links to its download and guide", async () => {
   await user.click(download);
   expect(screen.getByText("Your download has started").parentElement!.textContent).toContain("InvoiceGenerator.exe");
 });
+
+const BUNDLE = {
+  ...INFO,
+  filename: "MakePDF.mmx",
+  size_bytes: 61_000,
+  url: "https://dl.example.workers.dev/d/bundle-token",
+};
+
+test("with a bundle published: Add to MakeMyEXE first, the zip as a small link", async () => {
+  useApi(null);
+  mockFetch(({ path }) =>
+    path === "/automations/make-pdf/download" ? { body: INFO } : path === "/automations/make-pdf/bundle" ? { body: BUNDLE } : undefined,
+  );
+  const open = vi.spyOn(browser, "open").mockImplementation(() => {});
+  const user = userEvent.setup();
+  renderAt("/automations/make-pdf");
+
+  expect(await screen.findByText("61 KB · version 1.0.0")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Get MakeMyEXE" }).getAttribute("href")).toBe("/download");
+  await user.click(screen.getByRole("button", { name: /Add to MakeMyEXE/ }));
+  expect(open).toHaveBeenLastCalledWith(BUNDLE.url);
+  const status = screen.getByText("Your download has started").parentElement!;
+  expect(status.textContent).toContain("MakePDF.mmx");
+  expect(status.textContent).toContain("click Add");
+
+  await user.click(screen.getByRole("button", { name: /standalone app \(51 MB\)/ }));
+  expect(open).toHaveBeenLastCalledWith(INFO.url);
+  expect(screen.getByText("Your download has started").parentElement!.textContent).toContain("Extract All");
+  open.mockRestore();
+});
+
+test("the download page offers the installer with what to expect", async () => {
+  useApi(null);
+  const latest = {
+    version: "1.0.0",
+    filename: "MakeMyEXE-Setup-1.0.0.exe",
+    size_bytes: 38_200_000,
+    sha256: "ab".repeat(32),
+    url: "https://acct.r2.cloudflarestorage.com/b/app/1.0.0/MakeMyEXE-Setup-1.0.0.exe?X-Amz-Signature=x",
+    expires_in: 900,
+  };
+  mockFetch(({ path }) => (path === "/app/latest" ? { body: latest } : undefined));
+  const open = vi.spyOn(browser, "open").mockImplementation(() => {});
+  const user = userEvent.setup();
+  renderAt("/download");
+  expect(await screen.findByText("38 MB · version 1.0.0")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: /Download for Windows/ }));
+  expect(open).toHaveBeenCalledWith(latest.url);
+  expect(screen.getByText("Your download has started").parentElement!.textContent).toContain("Run anyway");
+  open.mockRestore();
+});
+
+test("before the first release the download page says so", async () => {
+  useApi(null);
+  mockFetch(({ path }) => (path === "/app/latest" ? { status: 503, body: { detail: "x" } } : undefined));
+  renderAt("/download");
+  expect(await screen.findByText(/first release is on its way/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Download for Windows/ })).toHaveProperty("disabled", true);
+});

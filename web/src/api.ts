@@ -165,6 +165,38 @@ export async function getDownload(id: string): Promise<DownloadInfo | null> {
   }
 }
 
+/** The same automation as a .mmx bundle for the installed MakeMyEXE app. Null until published. */
+export async function getBundle(id: string): Promise<DownloadInfo | null> {
+  if (!apiUrl()) return null;
+  try {
+    return await request<DownloadInfo>(`/automations/${encodeURIComponent(id)}/bundle`);
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 503 || err.status === 404)) return null;
+    throw err;
+  }
+}
+
+/** The MakeMyEXE installer (a short-lived link). */
+export interface AppDownloadInfo {
+  version: string;
+  filename: string;
+  size_bytes: number | null;
+  sha256: string | null;
+  url: string;
+  expires_in: number;
+}
+
+/** Null until the first app release (or without the API). */
+export async function getLatestApp(): Promise<AppDownloadInfo | null> {
+  if (!apiUrl()) return null;
+  try {
+    return await request<AppDownloadInfo>("/app/latest");
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 503 || err.status === 404)) return null;
+    throw err;
+  }
+}
+
 // --- Jobs -----------------------------------------------------------------------------
 
 const jobPath = (id: string) => `/jobs/${encodeURIComponent(id)}`;

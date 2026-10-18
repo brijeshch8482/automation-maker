@@ -88,9 +88,13 @@ def test_runner_and_packs_go_up_before_the_manifest_and_the_worker_serves_them(
 
     # The real Worker, on exactly what was uploaded: the size the manifest promises is exact.
     token = download_token(
-        "secret", runner=pack["runner"], layers=[], pack=pack["prefix"], name=pack["exe"],
+        "secret",
+        runner=pack["runner"],
+        layers=[],
+        pack=pack["prefix"],
+        name=pack["exe"],
         now=time.time(),
-    )  # fmt: skip
+    )
     import tests.packaging.test_zipblocks as zb
 
     monkeypatch.setattr(zb, "SECRET", "secret")
@@ -157,3 +161,49 @@ def test_release_zip_with_odd_paths_is_refused(tmp_path):
     (folder / "release.json").write_text(json.dumps({"version": "1.0.0"}))
     with pytest.raises(publish_packs.PublishError, match="unexpected path"):
         publish_packs.runner_from_release(folder, tmp_path / "work")
+
+
+@needs_tools
+def test_the_worker_streams_a_bundle_the_app_imports(tmp_path, key, trusted, monkeypatch):
+    """Publish, stream the bundle through the real Worker, import it into the app's store, run."""
+    from engine.store import AppStore
+
+    r2, done = tmp_path / "r2", []
+    monkeypatch.setattr(publish_catalog, "upload", r2_uploader(r2, done))
+    artifacts = tmp_path / "artifacts"
+    app_folder(artifacts)
+    result = publish_catalog.publish(
+        artifacts, "abc", R2, NOW, release_dir(tmp_path), key[0], "catalog-1"
+    )
+    pack = result["automations"]["make-pdf"]["pack"]
+    assert "packs/catalog/make-pdf/1.0.0/bundle/blocks.bin" in done
+    assert done.index("packs/catalog/make-pdf/1.0.0/bundle/layout.json") < len(done) - 1
+
+    token = download_token(
+        "secret", runner=None, layers=[], pack=pack["prefix"], name=pack["exe"], now=time.time()
+    )
+    import tests.packaging.test_zipblocks as zb
+
+    monkeypatch.setattr(zb, "SECRET", "secret")
+    out = tmp_path / "MakePDF.mmx"
+    response = run_worker(r2, token, out)
+    assert response["status"] == 200
+    assert response["headers"]["content-disposition"] == 'attachment; filename="MakePDF.mmx"'
+    assert int(response["headers"]["content-length"]) == pack["bundle_bytes"] == out.stat().st_size
+    with zipfile.ZipFile(out) as z:
+        assert z.testzip() is None
+        assert sorted(z.namelist()) == ["bundle.json", "packs/make-pdf-1.0.0.mmx"]
+        assert "MakePDF.exe" not in z.namelist()  # no Runner in a bundle
+        toc = json.loads(z.read("bundle.json"))
+    assert toc == {"format": 2, "packs": ["packs/make-pdf-1.0.0.mmx"], "layers": [], "licenses": []}
+
+    store = AppStore(tmp_path / "store", {"catalog-1": bytes.fromhex(key[1])})
+    (imported,) = store.import_bundle(out)
+    assert imported.imported and (imported.plan.id, imported.plan.version) == ("make-pdf", "1.0.0")
+    assert store.load("make-pdf").spec.id == "make-pdf"
+
+
+def test_bundle_size_formula():
+    layout = {"size": 1000, "entries": [{"name": "bundle.json"}, {"name": "packs/a-1.0.0.mmx"}]}
+    names = len("bundle.json") + len("packs/a-1.0.0.mmx")
+    assert publish_packs.bundle_size([layout]) == 1000 + 2 * 46 + names + 22

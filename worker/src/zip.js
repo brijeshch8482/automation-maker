@@ -73,28 +73,33 @@ function concat(chunks) {
 
 /**
  * The parts of the zip, in order: Uint8Arrays to write, and {key, size} objects to stream from R2.
- * runner: {prefix, layout}; blocks: [{prefix, layout}] (layers, then the pack); exeName: "MakePDF.exe".
+ * runner: {prefix, layout} or null for a bundle (no exe); blocks: [{prefix, layout, allow?}]
+ * (layers, then the pack); allow, a RegExp, is what entry names that block may hold.
+ * exeName: "MakePDF.exe" when there is a runner.
  */
 export function planZip(runner, blocks, exeName) {
-  if (!runner.layout?.exe) throw new LayoutError("runner layout has no exe");
   const parts = [];
   const central = [];
   const names = new Set();
   let offset = 0;
 
-  const exe = runner.layout.exe;
-  const exeBytes = encoder.encode(exeName);
-  const header = localHeader(exe, exeBytes);
-  parts.push(header, { key: `${runner.prefix}/exe.bin`, size: exe.csize });
-  central.push(centralHeader(exe, exeBytes, 0));
-  names.add(exeName.toLowerCase());
-  offset += header.length + exe.csize;
+  if (runner) {
+    if (!runner.layout?.exe) throw new LayoutError("runner layout has no exe");
+    const exe = runner.layout.exe;
+    const exeBytes = encoder.encode(exeName);
+    const header = localHeader(exe, exeBytes);
+    parts.push(header, { key: `${runner.prefix}/exe.bin`, size: exe.csize });
+    central.push(centralHeader(exe, exeBytes, 0));
+    names.add(exeName.toLowerCase());
+    offset += header.length + exe.csize;
+  }
 
-  for (const block of [{ ...runner, isRunner: true }, ...blocks]) {
-    const { layout, prefix } = block;
+  for (const block of runner ? [runner, ...blocks] : blocks) {
+    const { layout, prefix, allow } = block;
     if (layout?.format !== 1 || !Array.isArray(layout.entries)) throw new LayoutError(`bad layout in ${prefix}`);
     parts.push({ key: `${prefix}/blocks.bin`, size: layout.size });
     for (const entry of layout.entries) {
+      if (allow && !allow.test(entry.name)) throw new LayoutError(`unexpected entry in ${prefix}`);
       const lower = entry.name.toLowerCase();
       if (names.has(lower)) throw new LayoutError(`two entries named ${entry.name}`);
       if (entry.offset < 0 || entry.offset >= layout.size) throw new LayoutError(`bad offset in ${prefix}`);

@@ -12,7 +12,16 @@ const payload = {
 
 test("a signed token verifies and returns its payload", async () => {
   const token = await signToken("s3cret", payload);
-  assert.deepEqual(await verifyToken("s3cret", token, 1_900_000_000), payload);
+  assert.deepEqual(await verifyToken("s3cret", token, 1_900_000_000), { kind: "zip", ...payload });
+});
+
+test("a bundle token has no runner", async () => {
+  const { runner, ...rest } = payload;
+  const bundle = { kind: "bundle", ...rest };
+  assert.deepEqual(await verifyToken("s3cret", await signToken("s3cret", bundle), 0), bundle);
+  for (const bad of [{ ...bundle, runner }, { ...bundle, kind: "other" }, rest]) {
+    await assert.rejects(verifyToken("s3cret", await signToken("s3cret", bad), 0), /bad payload/);
+  }
 });
 
 test("wrong secret, edited payload, expired or malformed tokens are refused", async () => {

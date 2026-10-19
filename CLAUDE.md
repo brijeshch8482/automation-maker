@@ -21,10 +21,11 @@ Web product where users pick a ready-made automation or describe a custom one, a
 - Run the full test suite headless (`QT_QPA_PLATFORM=offscreen`) before opening a PR.
 - **Any UI change must ship screenshots.** Render each affected screen offscreen with the automation's `sample_data` (the same code path as guide mode, `QWidget.grab()`), save the PNGs under `docs/screenshots/<automation-id>/`, **open and look at them yourself** to check layout, labels, clipping and empty states, then embed them in the PR description.
 - For non-UI work, include in the PR description: the commands run, the test results, and sample output (e.g. the generated PDF rendered to PNG, or the rename preview table).
-- CI runs on both `ubuntu-latest` and `windows-latest`. The Windows job also renders the screenshots and uploads them as an artifact, so Windows rendering gets checked on every PR.
+- **Local-first (since 2026-10-19):** development runs from the CLI on the developer's Windows PC (`D:/Research/automation-maker`; all caches, venvs and build output on D:, never C:). Before a PR, run locally what CI no longer runs on PRs: the full suite on Windows, the Runner build with `--check-pack` on the free set, and, when the installer or Hub changes, `build.installer make` plus a real install and a no-argument start. Batch the day's work into one PR.
+- CI on a pull request runs only the Linux jobs; Windows jobs (`test` on Windows, `package`, `package (custom step)`, `runner`) run on pushes to `main`, which *publish catalog* needs. Docs-only changes run nothing. GitHub Free has 2,000 minutes a month and Windows minutes count twice (`tests/packaging/test_ci_minutes.py`).
 
 ## Development notes
-- EXEs target Windows 10/11. Cloud dev is Linux: run Qt tests with `QT_QPA_PLATFORM=offscreen`; real Windows builds run in GitHub Actions.
+- EXEs target Windows 10/11. Development is on Windows (local-first, above); run Qt tests with `QT_QPA_PLATFORM=offscreen`. Signing with the real keys and publishing happen only in GitHub Actions on `main`; the keys and R2 write tokens never come to the PC, and generated custom-app code never runs on it.
 - Python 3.12, Ruff for lint/format, pytest for tests. Every block and every catalog automation needs tests that use its `sample_data`.
 - Routine prompts in `docs/ROUTINES.md` must match what's saved at claude.ai/code/routines. Update both together.
 

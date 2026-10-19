@@ -131,8 +131,8 @@ Repository secrets: **empty in both repos**, and they must stay empty.
 
 | Repo › workflow | Trigger | Environment | What it does | Status |
 |---|---|---|---|---|
-| automation-maker › **CI** | push, PR | `catalog` only in *publish catalog*, only on `main` | Tests, four Windows app builds, Runner, packs, web, Worker tests; on `main` signs and uploads the catalog | ✅ green |
-| automation-maker › **Release** | by hand, `main` | `catalog` | Signs the free set, builds the Runner and the Inno Setup installer, installs/uninstalls it on Windows, uploads `app/<version>/` and `app/latest.json` | ❌ never run on `main` (`/app/latest` says "not released yet") |
+| automation-maker › **CI** | push to `main`, PR (docs-only changes skipped) | `catalog` only in *publish catalog*, only on `main` | PR: Linux tests, packs, web, Worker. `main`: also the Windows test, four Windows app builds, custom package, Runner, then signs and uploads the catalog. Windows checks for PRs run locally first (CLAUDE.md, local-first) | ✅ green |
+| automation-maker › **Release** | by hand, `main` | `catalog` | Signs the free set, builds the Runner and the Inno Setup installer, installs/uninstalls it on Windows, uploads `app/<version>/` and `app/latest.json` | ✅ 1.0.0 published 2026-10-18 |
 | automation-maker › **Deploy download Worker** | by hand, `main` | `worker` | Worker tests, `wrangler deploy`, sets its secret | ✅ ran 2026-10-18 |
 | automation-maker › **Sync automation-builds** | by hand, tag `engine-v*` | `sync` | Copies `engine/ spec/ tools/ build/`, `build.yml`, `CLAUDE.md` to automation-builds `main` | ✅ first run 2026-10-18 (`main` at b83c50f) |
 | automation-maker › **Clean old artifacts** | by hand | none | Deletes old Actions artifacts (500 MB limit) | ✅ when needed |

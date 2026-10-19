@@ -270,7 +270,8 @@ class InstallerCheck:
             self._fail("registry", "no per-user uninstall entry")
 
     def _hub(self) -> None:
-        report = self._exe("hub", ["--hub", "--launch-check"])
+        # No --hub: the Start menu shortcut starts the exe with no arguments, so check that path.
+        report = self._exe("hub", ["--launch-check"])
         self.report.automations = sorted(report.get("automations", []))
         if report.get("status") != "passed" or self.report.automations != self.expect:
             self._fail("hub", json.dumps(report))

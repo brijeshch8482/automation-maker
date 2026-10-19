@@ -69,7 +69,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.spec is None and args.run is None and not args.hub and args.import_file is None:
         args.spec = _default_spec()
         if is_runner() and not (args.spec and args.spec.is_file()):
-            args.hub = True  # the installed app: nothing next to the exe but the runtime
+            # The installed app (the Start menu shortcut): nothing next to the exe but the runtime.
+            args.spec, args.hub = None, True
     if args.hub or args.import_file is not None:
         if args.spec or args.run or args.smoke_test or args.guide_mode:
             parser.error("--hub and --import take only --launch-check and --report")

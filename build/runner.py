@@ -187,7 +187,9 @@ class RunnerBuild:
         return folder
 
     def _exe(self, stage: str, exe: Path, args: list[str], qt: str | None = "offscreen"):
-        result = exe.parent / f"{stage}-result.json"
+        # Never next to the exe: the Runner folder is what gets released and installed.
+        result = self.work / "reports" / f"{stage}-result.json"
+        result.parent.mkdir(parents=True, exist_ok=True)
         env = {
             "MAKEMYEXE_DATA_DIR": str(self.work / "appdata"),
             "MAKEMYEXE_STORE_DIR": str(self.work / "store"),
@@ -299,8 +301,6 @@ class RunnerBuild:
                 shutil.copy2(self.packs[0], release / "app.mmx")
                 code, report, _ = self._exe("release", exe_path(release), ["--smoke-test"])
                 (release / "app.mmx").unlink()
-                for leftover in release.glob("release-result.json"):
-                    leftover.unlink()
                 if code == 0 or TAMPERED_MESSAGE not in str(report.get("error")):
                     raise StageFailed(
                         "release", "release Runner with a CI-signed pack", json.dumps(report)

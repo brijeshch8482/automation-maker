@@ -1,12 +1,23 @@
 name: CI
 
+# Local-first (CLAUDE.md): Windows builds and tests run on the developer's PC before a PR, so a
+# pull request runs only the Linux jobs; main runs everything, because publish catalog needs the
+# Windows builds. Docs-only changes run nothing. GitHub Free has 2,000 minutes a month and
+# Windows minutes count twice.
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "**/*.md"]
   pull_request:
+    paths-ignore: ["docs/**", "**/*.md"]
 
 permissions:
   contents: read
+
+# A newer push to the same PR cancels the older run. main is never cancelled mid-publish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -14,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: ${{ fromJSON(github.event_name == 'push' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
@@ -81,6 +92,7 @@ jobs:
   # folder, its smoke test, a launch check on the real Windows desktop, Guide.pdf and the zip.
   package:
     name: package (${{ matrix.automation }})
+    if: github.event_name == 'push'
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
@@ -182,6 +194,7 @@ jobs:
   runner:
     name: runner (Windows)
     needs: packs
+    if: github.event_name == 'push'
     runs-on: windows-latest
     timeout-minutes: 40
     env:
@@ -249,6 +262,7 @@ jobs:
   # Not part of the catalog: its artifact is job-*, never app-*.
   package-custom:
     name: package (custom step)
+    if: github.event_name == 'push'
     runs-on: windows-latest
     timeout-minutes: 30
     env:
